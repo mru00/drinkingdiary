@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en" manifest="cache.appmanifest">
+
+<head>
+<meta charset="utf-8">
+
+<title>Drinking Diary</title>
+
+<link rel="shortcut icon" sizes="16x16" href="cocktail_16.png">
+<link rel="apple-touch-icon" sizes="57x57" href="cocktail_57.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="viewport" content="user-scalable=no, width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<link rel="apple-touch-startup-image" href="startup_320x460.png">
+
+<link rel="stylesheet" href="http://code.jquery.com/mobile/1.4.4/jquery.mobile-1.4.4.min.css" />
+<script src="http://code.jquery.com/jquery-1.11.1.min.js"></script>
+<script src="http://code.jquery.com/mobile/1.4.4/jquery.mobile-1.4.4.min.js"></script>
+
+<!-- polyfill indexeddb -> websql adapter ftw! -->
+<script src="http://nparashuram.com/IndexedDBShim/dist/IndexedDBShim.min.js"></script>
+
+
+<script type="text/javascript">
+
+function formatDate(date) {
+    console.assert(date != null);
+    var day = ("0" + date.getDate()).slice(-2);
+    var month = ("0" + (date.getMonth() + 1)).slice(-2);
+    return date.getFullYear()+"-"+(month)+"-"+(day) ;
+}
+String.format = function() {
+    var s = arguments[0];
+    for (var i = 0; i < arguments.length - 1; i++) {
+        var reg = new RegExp("\\{" + i + "\\}", "gm");
+        s = s.replace(reg, arguments[i + 1]);
+    }
+    return s;
+}
+
+var myns = {};
+myns.ui = {};
+myns.db = {};
+myns.db.db = null;
+myns.db.onerror = function(e) { console.log(e); };
+
+
+const DB_NAME = "drinks_dev_3";
+const STORE_NAME_DRINKS = "drink";
+const STORE_NAME_SERVINGS = "serving";
+const STORE_NAME_CONSUMPTIONS = "consumption";
+const ALL_STORES = [ STORE_NAME_DRINKS, STORE_NAME_SERVINGS, STORE_NAME_CONSUMPTIONS ];
+const RO = "readonly";
+const RW = "readwrite";
+
+
+
+myns.db.onopenfinished = null;
+myns.db.open = function() {
+    var version = 23;
+    var request = indexedDB.open(DB_NAME, version);
+
+    // We can only create Object stores in a versionchange transaction.
+    request.onupgradeneeded = function(e) {
+        var db = e.target.result;
+
+        // A versionchange transaction is started automatically.
+        e.target.transaction.onerror = myns.db.onerror;
+
+        ALL_STORES.forEach( function(store) {
+            if(db.objectStoreNames.contains(store)) { db.deleteObjectStore(store); }
+            });
+
+
+        var inserter;
+        var store_servings = db.createObjectStore(STORE_NAME_SERVINGS, {keyPath: "name"});
+        var store_drinks = db.createObjectStore(STORE_NAME_DRINKS, {keyPath: "name"});
+        var store_consumptions = db.createObjectStore(STORE_NAME_CONSUMPTIONS, {keyPath: "date"});
+
+        var get_inserter = function(store) {
+            return function(data) { 
+                var request = store.put(data);
+                //request.onerror = function(e)  { console.log(e); };
+            }
+        }
+
+        inserter = get_inserter(store_servings);
+        inserter({name:"Halbe", liter: 0.5});
+        inserter({name:"Seiterl", liter: 0.3});
+        inserter({name:"1/4erl", liter: 0.25});
+        inserter({name:"1/8erl", liter: 0.125});
+        inserter({name:"2cl", liter: 0.02});
+        inserter({name:"4cl", liter: 0.04});
+        inserter({name:"Flasche (0.75)", liter: 0.75});
+
+        inserter = get_inserter(store_drinks);
+        inserter({name:"Bier", calories:100, alc:5, servings:["Halbe", "Seiterl"]});
+        inserter({name:"Wein", calories:100, alc:9, servings:["1/8erl"]});
+        inserter({name:"Spritzer", calories: 100, alc:4, servings:["1/4erl", "Halbe"]});
+        inserter({name:"Sekt", calories: 100, alc:4, servings:["1/8erl", "Flasche (0.75)"]});
+
+        inserter = get_inserter(store_consumptions);
+        inserter( {date:"2014-06-04", 
+            drinks: [ 
+            {drink: "Bier", amount: 3, servings:"Halbe"}, 
+            {drink: "Wein", amount: 1, servings: "1/8erl"} 
+            ], 
+            tags:["fun"]});
+
+        inserter( {date:"2013-12-31", 
+            drinks: [ 
+            {drink: "Bier", amount: 30, servings:"Halbe"}, 
+            {drink: "Sekt", amount: 15, servings: "Flasche (0.75)"} 
+            ], 
+            tags:["puke"]});
+    };
+
+    request.onsuccess = function(e) {
+
+        myns.db.db = e.target.result;
+
+        if (myns.db.onopenfinished != null) {
+            myns.db.onopenfinished();
+        }
+    };
+
+    request.onerror = myns.db.onerror;
+};
+
+myns.db.drop = function(store_name, key) {
+    var trans = myns.db.db.transaction([store_name], RW);
+    var store = trans.objectStore(store_name);
+    var request = store['delete'](key);
+}
+
+myns.db.insert = function(store_name, data, oncomplete) {
+    var trans = myns.db.db.transaction([store_name], RW);
+    var store = trans.objectStore(store_name);
+    var request = store.put(data);
+    trans.oncomplete = function(e) { if(oncomplete) {oncomplete()}; };
+    request.onerror = function(e) { console.log(e.value); };
+}
+
+myns.db.fetchAll = function(store_name, onresult) {
+    var trans = myns.db.db.transaction([store_name], RO);
+    var store = trans.objectStore(store_name);
+
+    // Get everything in the store;
+    var keyRange = IDBKeyRange.lowerBound(0);
+    var cursorRequest = store.openCursor(keyRange);
+
+    cursorRequest.onsuccess = function(e) {
+        var result = e.target.result;
+        if(!!result == false)
+          return;
+
+        onresult(result.value);
+
+        // safari: parser error, reserved keyword 'continue'
+        result['continue']();
+    };
+
+    trans.onerror = myns.db.onerror;
+    cursorRequest.onerror = myns.db.onerror;
+}
+
+
+function Page(selector) {
+    var self = this;
+    this.value = null;
+    this.selector = selector;
+    this.getPage = function() {
+        return $(selector);
+    }
+    $(function() {
+        var page = self.getPage();
+        page.on("pagebeforeshow", self.show);
+        page.on("pagehide", self.hide);
+        page.on("pagehide", self.hide_);
+        page.data('page_obj', self);
+        page.find('.btn-delete').hide();
+        });
+    this.hide_ = function() {
+        var page = self.getPage();
+        self.value = null;
+        page.find('.btn-delete').hide();
+    }
+}
+
+
+function onDbOpen() {
+    $.mobile.activePage.data('page_obj').show()
+}
+
+$(function() {
+
+    myns.db.onopenfinished = onDbOpen;
+    myns.db.open();
+
+
+    $('.btn-add, .btn-save, .btn-delete, .btn-cancel, .btn-back').addClass('btn btn-icon-left');
+    $('.btn-edit').addClass('btn btn-icon-right');
+
+    $('.btn').addClass('ui-btn');
+    $('.btn-icon-left').addClass('ui-btn-icon-left');
+    $('.btn-icon-right').addClass('ui-btn-icon-right');
+   
+
+    $('.btn-edit').addClass('ui-icon-edit');
+    $('.btn-add').addClass('ui-icon-plus');
+    $('.btn-save').addClass('ui-icon-check ui-btn-inline');
+    $('.btn-delete').addClass('ui-icon-delete ui-btn-inline');
+    $('.btn-cancel').addClass('ui-icon-back ui-btn-inline');
+    $('.btn-back').addClass('ui-icon-back ui-btn-b');
+
+
+    $('.ui-btn').addClass('ui-shadow ui-corner-all');
+    });
+
+
+$(document).on('pagebeforecreate', '', function (event) {
+    $(event.target).append('<div data-role="footer" style="text-align: center"><small>Copyright &copy; 2014 <a href="mailto:mru@sisyphus.teil.cc">mru@sisyphus.teil.cc</a></small></div>')} 
+    );
+
+</script>
+
+</head>
+<body>
+
+
+
+
+
+
+<script>
+
+page_main = new Page("#page-main");
+page_main.show = function() {
+    var target_ul = $('#consumption-list');
+
+    myns.db.fetchAll(STORE_NAME_CONSUMPTIONS, function(value) {
+        var elem = $(String.format('<li><a href="#page-consumption-details" class="btn-edit ui-btn ui-btn-icon-right ui-icon-edit">{0}: {1}</a></li>',
+              value.date,
+              value.drinks
+              .map(function(drink) {return String.format("{0} {1} {2}", drink.amount, drink.servings, drink.drink); })
+              .join(', ')
+              ));
+        target_ul.append(elem);
+        elem.click(function() { page_consumption_details.value = value; });
+        });
+}
+page_main.hide = function() {
+    $('#consumption-list').empty();
+}
+</script>
+<div data-role="page" id="page-main" class="page">
+
+  <div data-role="header"><h1>Drinking Diary</h1></div>
+
+  <div role="main" class="ui-content">
+    <ul id="consumption-list" data-role="listview" data-filter="true" data-inset="true"></ul>
+
+    <a href="#page-consumption-details" class="btn-add ui-btn">Add consumption</a>
+    <a href="#page-drinks" class="ui-btn ui-icon-edit ui-btn-icon-left">Edit drinks</a>
+    <a href="#page-servings" class="ui-btn ui-icon-edit ui-btn-icon-left">Edit servings</a>
+    <a href="#page-about" class="ui-btn ui-icon-info ui-btn-icon-left">About</a>
+  </div>
+</div>
+
+
+
+
+<script>
+
+function addConsumptionEntry(value) {
+
+    var div = $('#consume-entries');
+
+    var fs = $('<fieldset data-role="controlgroup" data-type="horizontal"></fieldset>');
+    div.append(fs);
+
+    var select_amount = $('<select name="amount" id="consume-amount1">');
+    var select_serv = $('<select name="serving">');
+    var select_drink = $('<select name="drink">');
+
+
+    for (i = 1; i <= 20; i++) {
+        select_amount.append(String.format('<option value="{0}" {1}>{0}</option>', i, (value != null && i == value.amount ? "selected" : " ")));
+    }
+
+    select_serv.append( $( '<option value=""></option>' ) );
+    myns.db.fetchAll(STORE_NAME_SERVINGS, function(serv) {
+        var elem = $( String.format('<option value="{0}">{0}</option>', serv.name) );
+        select_serv.append( elem );
+        if (value != null && serv.name == value.servings) elem.attr('selected',"selected").trigger('change');
+        
+        });
+
+    select_drink.append( $( '<option value=""></option>' ) );
+    myns.db.fetchAll(STORE_NAME_DRINKS, function(drink) {
+        var elem = $( String.format('<option value="{0}" {1}>{0}</option>', drink.name, (value != null && drink.name == value.drink ? "selected" : " ")) ) ;
+        select_drink.append( elem );
+        if (value != null && drink.name == value.drink) elem.attr('selected', 'selected').trigger('change');
+        });
+
+    var delete_entry = $('<button data-inline="true">-</button>');
+    delete_entry.on('click', function() { fs.remove(); });
+
+    fs.append(select_amount).trigger('create');
+    fs.append(select_serv).trigger('create');
+    fs.append(select_drink).trigger('create');
+    fs.append(delete_entry).trigger('create');
+    div.append(fs).trigger('create');
+}
+page_consumption_details = new Page("#page-consumption-details");
+page_consumption_details.show = function() {
+    var input_date = $('#consume-date');
+    if (page_consumption_details.value) {
+        $('#consume-date').val(page_consumption_details.value.date);
+        page_consumption_details.value.drinks.forEach(function (d) {
+            addConsumptionEntry(d);
+            });
+        page_consumption_details.getPage().find('.btn-delete').show();
+    }
+    else {
+        input_date.val(formatDate(new Date()));
+        addConsumptionEntry();
+    }
+}
+page_consumption_details.hide = function() {
+    $('#consume-entries').empty(); 
+    $('#consume-date').val("");
+}
+page_consumption_details.save = function() {
+
+    var fs = $('#consume-entries fieldset');
+
+    var drinks = [];
+    fs.each(function(idx, elem) {
+        drinks.push( {
+          "amount":$( this ).find ('select[name="amount"]').val(),
+          "drink":$( this ).find ('select[name="drink"]').val(),
+          "servings":$( this ).find ('select[name="serving"]').val()
+          });
+        });
+   
+    myns.db.insert(STORE_NAME_CONSUMPTIONS, {"date": $('#consume-date').val(), "drinks": drinks });
+}
+page_consumption_details.drop = function() {
+    myns.db.drop(STORE_NAME_CONSUMPTIONS, $('#page-consumption-details').find('.field-date').val());
+}
+$(function() {
+    var page = $('#page-consumption-details');
+    page.find('.btn-add').click(addConsumptionEntry);
+    page.find('.btn-save').click(page_consumption_details.save);
+    page.find('.btn-delete').click(page_consumption_details.drop);
+    });
+</script>
+<div data-role="page" id="page-consumption-details" class="page page-edit">
+
+  <div data-role="header"><h1>I consumed</h1></div>
+
+  <div role="main" class="ui-content">
+    <form name="consumption" id="consumption-form">
+      <input name="date" id="consume-date" class="field-date" type="date">
+      <div id="consume-entries">
+      </div>
+      <datalist id="tags"></datalist>
+    </form>
+
+    <button class="btn-add">Add entry</button>
+
+    <a href="#page-main" data-rel="back" class="btn-save">Save</a>
+    <a href="#page-main" data-rel="back" class="btn-cancel">Cancel</a>
+    <a href="#page-main" data-rel="back" class="btn-delete">Delete</a>
+  </div>
+</div>
+
+
+
+
+
+
+
+
+<script>
+page_drinks = new Page("#page-drinks");
+page_drinks.show = function() {
+    var target_ul = $('#drink-list');
+
+    myns.db.fetchAll(STORE_NAME_DRINKS, function(value) {
+        var elem = $('<li><a href="#page-drink-details" class="btn-edit ui-btn ui-btn-icon-right ui-icon-edit">'+value.name+'</a></li>');
+        target_ul.append(elem);
+        elem.click(function() { page_drink_details.value = value });
+        });
+}
+page_drinks.hide = function() {
+    $('#drink-list').empty();
+}
+</script>
+<div data-role="page" id="page-drinks" class="page">
+
+  <div data-role="header"><h1>Drinks</h1></div>
+
+  <div role="main" class="ui-content">
+    <ul id="drink-list" data-role="listview" data-filter="true" data-inset="true"></ul>
+
+    <a href="#page-drink-details" class="btn-add ui-btn">Add drink</a>
+    <a href="#page-main" data-direction="reverse" class="btn-back ui-btn ui-btn-b">Back</a>
+  </div>
+</div>
+
+
+
+
+
+
+<script>
+page_drink_details = new Page("#page-drink-details");
+page_drink_details.show = function() {
+    var page = $('#page-drink-details');
+    var value = page_drink_details.value
+    if (value != null) {
+        page.find('.field-name').val(value.name);
+        page.find('.field-alc').val(value.alc);
+        page.find('.field-calories').val(value.calories);
+        page.find('.btn-delete').show()
+    }
+}
+page_drink_details.hide = function() {
+    var page = $('#page-drink-details');
+    page.find('.field-name').val('');
+    page.find('.field-alc').val('');
+    page.find('.field-calories').val('');
+}
+page_drink_details.save = function() {
+    myns.db.insert(STORE_NAME_DRINKS, {
+        name: $('.drink-details-name').val(),
+        alc: $('.drink-details-alc').val(),
+        calories: $('.drink-details-calories').val()
+        });
+}
+page_drink_details.validate = function() {
+}
+page_drink_details.drop = function() {
+    myns.db.drop(STORE_NAME_DRINKS, $('.drink-details-name').val());
+}
+$(function() {
+    var page = page_drink_details.getPage();
+    page.find('.btn-save').click(page_drink_details.save);
+    page.find('.btn-delete').click(page_drink_details.drop);
+    });
+</script>
+<div data-role="page" id="page-drink-details" class="page page-edit">
+
+  <div data-role="header"><h1>Drink</h1></div>
+
+  <div role="main" class="ui-content">
+    <table data-role="table">
+      <thead>
+        <tr><th>Name</th><th>Alc %</th><th>Calories per liter</th></tr>
+      </thead>
+      <tbody>
+      <tr>
+        <th><input class="drink-details-name field-name"></th>
+        <td><input class="drink-details-alc field-alc" type="number"></td>
+        <td><input class="drink-details-calories field-calories" type="number"></td>
+      </tr>
+      </tbody>
+    </table>
+
+    <a href="#page-drinks" data-rel="back" class="btn-save">Save</a>
+    <a href="#page-drinks" data-rel="back" class="btn-cancel">Cancel</a>
+    <a href="#page-drinks" data-rel="back" class="btn-delete">Delete</a>
+  </div>
+</div>
+
+
+
+
+
+
+
+<script>
+page_servings = new Page("#page-servings");
+page_servings.show = function() {
+    var target_ul = $('#serving-list');
+
+    myns.db.fetchAll(STORE_NAME_SERVINGS, function(value) {
+        var elem = $(String.format('<li><a href="#page-serving-details" class="btn-edit btn ui-btn ui-btn-icon-right ui-icon-edit">{0} -- {1}l</a></li>', 
+              value.name, 
+              value.liter));
+        target_ul.append(elem);
+        elem.click(function() { page_serving_details.value = value; });
+        });
+}
+page_servings.hide = function() { 
+    $('#serving-list').empty();
+}
+</script>
+<div data-role="page" id="page-servings" class="page">
+
+  <div data-role="header"><h1>Servings</h1></div>
+
+  <div role="main" class="ui-content">
+
+    <ul id="serving-list" data-role="listview" data-filter="true" data-inset="true"></ul>
+
+    <a href="#page-serving-details" class="btn-add ui-btn">Add serving</a>
+    <a href="#page-main" data-direction="reverse" class="btn-back ui-btn">Back</a>
+  </div>
+</div>
+
+
+
+
+<script>
+page_serving_details = new Page("#page-serving-details");
+page_serving_details.show = function () {
+    var value = page_serving_details.value;
+    if (value != null) {
+        $(".serving-details-name").val(value.name);
+        $(".serving-details-liters").val(value.liter);
+
+        var page = page_serving_details.getPage();
+        page.find('.btn-delete').show();
+    }
+}
+page_serving_details.hide = function () {
+    $('.serving-details-name, .serving-details-liters').val(''); 
+}
+page_serving_details.save = function() {
+    myns.db.insert(STORE_NAME_SERVINGS, {
+        name: $('.serving-details-name').val(),
+        liter: $('.serving-details-liters').val(),
+        });
+}
+page_serving_details.drop = function() {
+      myns.db.drop(STORE_NAME_SERVINGS, $('.serving-details-name').val());
+}
+
+$(function() {
+    var page = page_serving_details.getPage();
+    page.find('.btn-save').click(page_serving_details.save);
+    page.find('.btn-delete').click(page_serving_details.drop);
+    });
+</script>
+<div data-role="page" id="page-serving-details" class="page page-edit">
+
+  <div data-role="header"><h1>Serving</h1></div>
+
+  <div role="main" class="ui-content">
+
+    <table data-role="table">
+      <thead>
+        <tr><th>Name</th><th>Liters</th></tr>
+      </thead>
+      <tbody>
+      <tr>
+        <th><input class="serving-details-name field-name"></th>
+        <td><input type="number" class="serving-details-liters field-liters"></td>
+      </tr>
+      </tbody>
+    </table>
+
+    <a href="#page-servings" data-rel="back" class="btn-save">Save</a>
+    <a href="#page-servings" data-rel="back" class="btn-cancel">Cancel</a>
+    <a href="#page-servings" data-rel="back" class="btn-delete">Delete</a>
+  </div>
+</div>
+
+
+
+
+
+
+<div data-role="page" id="page-about" class="page">
+
+  <div data-role="header"><h1>About</h1></div>
+
+  <div role="main" class="ui-content">
+
+    <p>Use your browser's "Add to Home Screen" to install as app.</p>
+    <p>Contact:
+    <a href="mailto:mru@sisyphus.teil.cc">mru@sisyphus.teil.cc</a>
+    </p>
+
+    <a href="#page-main" data-direction="reverse" class="btn-back ui-btn">Back</a>
+  </div>
+</div>
+
+</body>
+</html>
+

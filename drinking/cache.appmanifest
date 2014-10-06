@@ -1,0 +1,22 @@
+CACHE MANIFEST
+
+# Serial 17
+
+
+CACHE:
+drinking.html
+cocktail_128.png
+cocktail_16.png
+cocktail_57.png
+startup_320x460.png
+startup_320x480.png
+
+http://code.jquery.com/jquery-1.11.1.min.js
+http://code.jquery.com/mobile/1.4.4/jquery.mobile-1.4.4.min.js
+http://code.jquery.com/mobile/1.4.4/jquery.mobile-1.4.4.min.css
+http://code.jquery.com/mobile/1.4.4/jquery.mobile-1.4.4.min.map
+
+http://code.jquery.com/mobile/1.4.4/images/ajax-loader.gif
+http://nparashuram.com/IndexedDBShim/dist/IndexedDBShim.min.map
+http://nparashuram.com/IndexedDBShim/dist/IndexedDBShim.min.js
+
