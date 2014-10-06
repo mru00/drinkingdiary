@@ -23,6 +23,8 @@
 
 <script type="text/javascript">
 
+$.fx.off = true;
+
 function formatDate(date) {
     console.assert(date != null);
     var day = ("0" + date.getDate()).slice(-2);
@@ -109,7 +111,7 @@ myns.db.open = function() {
 
         inserter( {date:"2013-12-31", 
             drinks: [ 
-            {drink: "Bier", amount: 30, servings:"Halbe"}, 
+            {drink: "Bier", amount: 15, servings:"Halbe"}, 
             {drink: "Sekt", amount: 15, servings: "Flasche (0.75)"} 
             ], 
             tags:["puke"]});
@@ -264,6 +266,7 @@ page_main.hide = function() {
     <a href="#page-drinks" class="ui-btn ui-icon-edit ui-btn-icon-left">Edit drinks</a>
     <a href="#page-servings" class="ui-btn ui-icon-edit ui-btn-icon-left">Edit servings</a>
     <a href="#page-about" class="ui-btn ui-icon-info ui-btn-icon-left">About</a>
+    <!--a href="#page-dump" class="ui-btn ui-icon-info ui-btn-icon-left">DB dump</a-->
   </div>
 </div>
 
@@ -290,7 +293,7 @@ function addConsumptionEntry(value) {
 
     select_serv.append( $( '<option value=""></option>' ) );
     myns.db.fetchAll(STORE_NAME_SERVINGS, function(serv) {
-        var elem = $( String.format('<option value="{0}">{0}</option>', serv.name) );
+        var elem = $( String.format('<option value="{0}">{0}</option>', encodeURI(serv.name), serv.name) );
         select_serv.append( elem );
         if (value != null && serv.name == value.servings) elem.attr('selected',"selected").trigger('change');
         
@@ -298,12 +301,12 @@ function addConsumptionEntry(value) {
 
     select_drink.append( $( '<option value=""></option>' ) );
     myns.db.fetchAll(STORE_NAME_DRINKS, function(drink) {
-        var elem = $( String.format('<option value="{0}" {1}>{0}</option>', drink.name, (value != null && drink.name == value.drink ? "selected" : " ")) ) ;
+        var elem = $( String.format('<option value="{0}">{1}</option>', encodeURI(drink.name), drink.name) ) ;
         select_drink.append( elem );
         if (value != null && drink.name == value.drink) elem.attr('selected', 'selected').trigger('change');
         });
 
-    var delete_entry = $('<button data-inline="true">-</button>');
+    var delete_entry = $('<button title="remove entry" data-inline="true" class="ui-btn ui-icon-delete ui-btn-icon-right">&nbsp;</button>');
     delete_entry.on('click', function() { fs.remove(); });
 
     fs.append(select_amount).trigger('create');
@@ -339,8 +342,8 @@ page_consumption_details.save = function() {
     fs.each(function(idx, elem) {
         drinks.push( {
           "amount":$( this ).find ('select[name="amount"]').val(),
-          "drink":$( this ).find ('select[name="drink"]').val(),
-          "servings":$( this ).find ('select[name="serving"]').val()
+          "drink":decodeURI($( this ).find ('select[name="drink"]').val()),
+          "servings":decodeURI($( this ).find ('select[name="serving"]').val())
           });
         });
    
@@ -574,16 +577,63 @@ $(function() {
 
 
 
+</script>
 <div data-role="page" id="page-about" class="page">
 
   <div data-role="header"><h1>About</h1></div>
 
   <div role="main" class="ui-content">
 
+    <h1>Drinking Diary</h2>
+    <p>It ain't that much!</p>
+    
     <p>Use your browser's "Add to Home Screen" to install as app.</p>
     <p>Contact:
     <a href="mailto:mru@sisyphus.teil.cc">mru@sisyphus.teil.cc</a>
     </p>
+
+    <a href="#page-main" data-direction="reverse" class="btn-back ui-btn">Back</a>
+  </div>
+</div>
+
+
+
+<script>
+page_db_dump = new Page("#page-dump");
+page_db_dump.show = function () {
+    page_db_dump.dump = { consumptions: [], drinks:[], servings: []};
+    myns.db.fetchAll(STORE_NAME_CONSUMPTIONS, function(value) {
+        page_db_dump.dump.consumptions.push(value);
+        $('#db-dump-area').text(JSON.stringify(page_db_dump.dump));
+        });
+    myns.db.fetchAll(STORE_NAME_DRINKS, function(value) {
+        page_db_dump.dump.drinks.push(value);
+        $('#db-dump-area').text(JSON.stringify(page_db_dump.dump));
+        });
+    myns.db.fetchAll(STORE_NAME_SERVINGS, function(value) {
+        page_db_dump.dump.servings.push(value);
+        $('#db-dump-area').text(JSON.stringify(page_db_dump.dump));
+        });
+}
+page_db_dump.hide = function () {
+$('#db-dump-area').text('');
+}
+page_db_dump.save = function() {
+}
+page_db_dump.drop = function() {
+}
+</script>
+<div data-role="page" id="page-dump" class="page">
+
+  <div data-role="header"><h1>DB Dump</h1></div>
+
+  <div role="main" class="ui-content">
+
+    <textarea id="db-dump-area"></textarea>
+    
+    <button class="btn-create-dump">Create dump</button>
+    <button class="btn-clear-dump">Clear</button>
+    <button class="btn-load-dump">Load dump</button>
 
     <a href="#page-main" data-direction="reverse" class="btn-back ui-btn">Back</a>
   </div>
