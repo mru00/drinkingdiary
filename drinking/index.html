@@ -143,8 +143,9 @@ myns.db.insert = function(store_name, data, oncomplete) {
     request.onerror = function(e) { console.log(e.value); };
 }
 
-myns.db.fetchAll = function(store_name, onresult) {
+myns.db.fetchAll = function(store_name, onresult, oncomplete) {
     var trans = myns.db.db.transaction([store_name], RO);
+    if (oncomplete) trans.oncomplete = oncomplete;
     var store = trans.objectStore(store_name);
 
     // Get everything in the store;
@@ -217,6 +218,11 @@ $(function() {
 
 
     $('.ui-btn').addClass('ui-shadow ui-corner-all');
+
+    $('.develop').each(function() {
+        var selector = 'a[href="#'+ $(this).attr('id')+'"]';
+        $(selector).hide();
+        });
     });
 
 
@@ -265,8 +271,9 @@ page_main.hide = function() {
     <a href="#page-consumption-details" class="btn-add ui-btn">Add consumption</a>
     <a href="#page-drinks" class="ui-btn ui-icon-edit ui-btn-icon-left">Edit drinks</a>
     <a href="#page-servings" class="ui-btn ui-icon-edit ui-btn-icon-left">Edit servings</a>
+    <a href="#page-stats" class="ui-btn ui-icon-info ui-btn-icon-left">Stats</a>
     <a href="#page-about" class="ui-btn ui-icon-info ui-btn-icon-left">About</a>
-    <!--a href="#page-dump" class="ui-btn ui-icon-info ui-btn-icon-left">DB dump</a-->
+    <a href="#page-dump" class="ui-btn ui-icon-info ui-btn-icon-left">DB dump</a>
   </div>
 </div>
 
@@ -293,7 +300,7 @@ function addConsumptionEntry(value) {
 
     select_serv.append( $( '<option value=""></option>' ) );
     myns.db.fetchAll(STORE_NAME_SERVINGS, function(serv) {
-        var elem = $( String.format('<option value="{0}">{0}</option>', encodeURI(serv.name), serv.name) );
+        var elem = $( String.format('<option value="{0}">{1}</option>', encodeURI(serv.name), serv.name) );
         select_serv.append( elem );
         if (value != null && serv.name == value.servings) elem.attr('selected',"selected").trigger('change');
         
@@ -584,8 +591,8 @@ $(function() {
 
   <div role="main" class="ui-content">
 
-    <h1>Drinking Diary</h2>
-    <p>It ain't that much!</p>
+    <h2>Drinking Diary</h2>
+    <p><q>It ain't that much!</q> (Anonymous)</p>
     
     <p>Use your browser's "Add to Home Screen" to install as app.</p>
     <p>Contact:
@@ -600,20 +607,20 @@ $(function() {
 
 <script>
 page_db_dump = new Page("#page-dump");
+page_db_dump.refresh = function() {
+        $('#db-dump-area').text(JSON.stringify(page_db_dump.dump));
+}
 page_db_dump.show = function () {
     page_db_dump.dump = { consumptions: [], drinks:[], servings: []};
     myns.db.fetchAll(STORE_NAME_CONSUMPTIONS, function(value) {
         page_db_dump.dump.consumptions.push(value);
-        $('#db-dump-area').text(JSON.stringify(page_db_dump.dump));
-        });
+        }, page_db_dump.refresh);
     myns.db.fetchAll(STORE_NAME_DRINKS, function(value) {
         page_db_dump.dump.drinks.push(value);
-        $('#db-dump-area').text(JSON.stringify(page_db_dump.dump));
-        });
+        },page_db_dump.refresh);
     myns.db.fetchAll(STORE_NAME_SERVINGS, function(value) {
         page_db_dump.dump.servings.push(value);
-        $('#db-dump-area').text(JSON.stringify(page_db_dump.dump));
-        });
+        }, page_db_dump.refresh);
 }
 page_db_dump.hide = function () {
 $('#db-dump-area').text('');
@@ -623,7 +630,7 @@ page_db_dump.save = function() {
 page_db_dump.drop = function() {
 }
 </script>
-<div data-role="page" id="page-dump" class="page">
+<div data-role="page" id="page-dump" class="page develop">
 
   <div data-role="header"><h1>DB Dump</h1></div>
 
@@ -634,6 +641,69 @@ page_db_dump.drop = function() {
     <button class="btn-create-dump">Create dump</button>
     <button class="btn-clear-dump">Clear</button>
     <button class="btn-load-dump">Load dump</button>
+
+    <a href="#page-main" data-direction="reverse" class="btn-back ui-btn">Back</a>
+  </div>
+</div>
+
+
+
+
+<script>
+/**
+ * Get the ISO week date week number
+ */
+Date.prototype.getWeek = function () {
+    // Create a copy of this date object
+    var target  = new Date(this.valueOf());
+
+    // ISO week date weeks start on monday
+    // so correct the day number
+    var dayNr   = (this.getDay() + 6) % 7;
+
+    // ISO 8601 states that week 1 is the week
+    // with the first thursday of that year.
+    // Set the target date to the thursday in the target week
+    target.setDate(target.getDate() - dayNr + 3);
+
+    // Store the millisecond value of the target date
+    var firstThursday = target.valueOf();
+
+    // Set the target to the first thursday of the year
+    // First set the target to january first
+    target.setMonth(0, 1);
+    // Not a thursday? Correct the date to the next thursday
+    if (target.getDay() != 4) {
+        target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
+    }
+
+    // The weeknumber is the number of weeks between the 
+    // first thursday of the year and the thursday in the target week
+    return 1 + Math.ceil((firstThursday - target) / 604800000); // 604800000 = 7 * 24 * 3600 * 1000
+}
+page_stats = new Page("#page-stats");
+page_stats.show = function () {
+    page_stats.per_week = {};
+    myns.db.fetchAll(STORE_NAME_CONSUMPTIONS, function(value) {
+        var date_obj = new Date(value.date);
+        var ww = String.format("{0}-{1}", date_obj.getFullYear(), date_obj.getWeek());
+        if ( !(ww in page_stats.per_week) ) { page_stats.per_week[ww] = [] }
+        page_stats.per_week[ww].push(value);
+        }, function() {
+        $('#stats-area').text(JSON.stringify(page_stats.per_week));
+        });
+}
+page_stats.hide = function () {
+    $('#db-dump-area').text('');
+}
+</script>
+<div data-role="page" id="page-stats" class="page develop">
+
+  <div data-role="header"><h1>Statistics</h1></div>
+
+  <div role="main" class="ui-content">
+
+    <textarea id="stats-area"></textarea>
 
     <a href="#page-main" data-direction="reverse" class="btn-back ui-btn">Back</a>
   </div>
