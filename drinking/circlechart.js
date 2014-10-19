@@ -21,7 +21,8 @@
       color_filled: '#369bd7',
       color_filled_alarm: 'red',
       color_border: '#879694',
-      color_text: '#879694',
+      color_text: '#111',
+      heatmap_gradient: { 0: "rgb(13,255,0)", .39: "rgb(81,153,23)", .66: "rgb(212,86,2)", .84: "rgb(240,47,23)", 1: "rgb(255,21,0)" },
       font: 'normal 60pt Verdana'
     },
 
@@ -33,18 +34,44 @@
       this.ready = false;
       var that = this;
 
+      this.createpalette();
+      this.element.css('width', this.options.width);
+
       // wait for webfont load etc...
       $(window).on('load', function() {
         that.ready = true;
         that.draw();
       });
     },
+    heatmap: function(value) {
+      var h = (100 - value);
+      var s = 100;
+      var l = value * 0.50;
+      return "hsl("+h+",100%,"+l+"%)";
+    },
+    createpalette: function() {
+      var canvas = $('<canvas width="256" height="1">');
+      var ctx = canvas.get(0).getContext('2d');
+
+      var gradient = ctx.createLinearGradient(0, 0, 256, 1);
+      for (var key in this.options.heatmap_gradient) {
+        gradient.addColorStop(key, this.options.heatmap_gradient[key]);
+      }
+
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, 256, 1);
+
+      this.gradient_palette = ctx.getImageData(0, 0, 256, 1).data;
+    },
+    heatmap2: function(value) {
+      var value1 = Math.min( Math.round(2.56 * value, 100), 255);
+      var off = value1 * 4;
+      var rgb =  "rgb("+this.gradient_palette[off+0]+","+this.gradient_palette[off+1]+","+this.gradient_palette[off+2]+")";
+      return rgb;
+    },
 
     get_filled_color: function(value) {
-      if (value < 100) {
-        return this.options.color_filled;
-      }
-      return this.options.color_filled_alarm;
+      return this.heatmap2(value);
     },
 
     get_text_color: function(value) {

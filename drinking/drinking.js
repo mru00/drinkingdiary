@@ -4,6 +4,9 @@
 * Copyright (C) 2014 mru@sisyphus.teil.cc
 */
 
+function format_ww(date_obj) {
+  return String.format("{0}-{1}", date_obj.getFullYear(), date_obj.getWeek());
+}
 function formatDate(date) {
   console.assert(date != null);
   var day = ("0" + date.getDate()).slice(-2);
@@ -73,7 +76,7 @@ function b64_to_utf8( str ) {
  * by testing for a 'synthetic=true' property on the event object
  * @param {HTMLNode} node The node to fire the event handler on.
  * @param {String} eventName The name of the event without the "on" (e.g., "focus")
- */
+*/
 function fireEvent(node, eventName) {
   // Make sure we use the ownerDocument from the provided node to avoid cross-window problems
   var doc;
@@ -100,21 +103,21 @@ function fireEvent(node, eventName) {
     // the event firing is going to fail.
     switch (eventName) {
       case "click":
-      case "mousedown":
-      case "mouseup":
-        eventClass = "MouseEvents";
-        break;
+        case "mousedown":
+          case "mouseup":
+            eventClass = "MouseEvents";
+      break;
 
       case "focus":
-      case "change":
-      case "blur":
-      case "select":
-        eventClass = "HTMLEvents";
-        break;
+        case "change":
+          case "blur":
+            case "select":
+              eventClass = "HTMLEvents";
+      break;
 
       default:
         throw "JSUtil.fireEvent: Couldn't find an event class for event '" + eventName + "'.";
-        break;
+      break;
     }
     var event = doc.createEvent(eventClass);
     var bubbles = eventName == "change" ? false : true;  
@@ -125,9 +128,6 @@ function fireEvent(node, eventName) {
   }
 };
 
-function format_ww(date_obj) {
-  return String.format("{0}-{1}", date_obj.getFullYear(), date_obj.getWeek());
-}
 
 
 function consumption_to_unit(abv, amount, liter) {
@@ -141,22 +141,41 @@ var loading_counter = 0;
 function start_loading_animation() {
   var lc1 = loading_counter;
   if (loading_counter == 0 ) {
-    $.mobile.loading('show');
+    window.setTimeout(function () { $.mobile.loading('show'); }, 0);
   }
   loading_counter ++;
-  console.assert(loading_counter == lc1 + 1);
+  //console.assert(loading_counter == lc1 + 1);
 }
 function end_loading_animation() {
   var lc1 = loading_counter;
   if (loading_counter > 0 ) {
     loading_counter --;
     if (loading_counter == 0 ) {
-      $.mobile.loading('hide');
+      window.setTimeout(function() { $.mobile.loading('hide'); }, 0);
     }
   }
-  console.assert(loading_counter == lc1 - 1);
+  //console.assert(loading_counter == lc1 - 1);
 }
 
+
+
+$.extend({
+  getUrlVars: function(){
+    var vars = {}, hash;
+    var hashes = window.location.href.slice(window.location.href.indexOf('?') + 1).split('&');
+    for(var i = 0; i < hashes.length; i++)
+      {
+        hash = hashes[i].split('=');
+        var k = decodeURI(hash[0]);
+        var v = hash[1] != null ? decodeURI(hash[1]) : null;
+        vars[k] = v;
+      }
+      return vars;
+  },
+  getUrlVar: function(name){
+    return $.getUrlVars()[name];
+  }
+});
 
 
 var last_error = null;
@@ -165,7 +184,7 @@ function promiseErrorHandler(msg) {
   return function(a, e) {
     if (a == null) a = { message: "unknown" };
     if (typeof a.message != "string") a.message= "unknown";
-    console.log(msg + ": Action error: " + a.message, a, e);
+      console.log(msg + ": Action error: " + a.message, a, e);
     last_error = msg + ": " + a.message;
     going_to_error_page = true;
     $.mobile.changePage('#page-show-error');
@@ -189,9 +208,27 @@ function Page(selector, props) {
   this.value = null;
   this.selector = selector;
 
-  $.extend(this, props, {
+
+  /* page instance may overwrite several methods, if desired:
+  *
+  * Page.show()
+  * Page.oncreate()
+  * Page.hide()
+  *
+  * methods and properties to be overwritten must be specified in 
+  * the 'props' argument, as a dictionary.
+  *
+  *
+  * ex:
+  *
+  * var super_page = new Page('#id-of-my-page', {
+  *   show: function() { alert ('hi!'); }
+  *   });
+  */
+
+  $.extend(this, {
     onbutton: function(button_selector, handler) {
-      self.jq().find(button_selector).click(self.handle(handler));
+      self.find(button_selector).click(self.handle(handler));
     },
 
     jq: function() { return $(selector); },
@@ -251,15 +288,30 @@ function Page(selector, props) {
         self.value = null;
         self.hide();
       }
+    },
+
+    // usually overwritten:
+    show: function() {
+      // called after a page becomes visible, usually by changePage or a link.
+      //
+      // may return a promise - then a loading icon will be displayed
+    },
+    hide: function() {
+      // called before the page is replace with another one
+    },
+    oncreate: function() {
+      // called when the page is first created. do your button bindings here!
     }
 
+
   });
+
+  $.extend(this, props);
 
   $(function() {
     var page = self.jq();
     page.on("pagebeforeshow", self.handle(self.show_));
     page.on("pagehide", self.handle(self.hide_));
-    page.data('page_obj', self);
 
     // on document ready... oncreate for this page
     self.oncreate_();
@@ -283,7 +335,8 @@ function makeExceptionHandlingPromise(handler) {
 //
 // diagnostic promise handler
 function _(promise, title){
-  if (title == null) title = "unknown";
+  if (title == null) 
+    title = "unknown";
   start_loading_animation();
   promise.then(function(a, e){
     console.log("Action completed done", e.type, a, e);
@@ -297,6 +350,13 @@ function _(promise, title){
   });
 }
 
+function invokeLater(handler) {
+  var dfd = new jQuery.Deferred();
+  window.setTimeout(function() {
+    handler().then(dfd.resolve, dfd.reject);
+  }, 0);
+  return dfd.promise();
+}
 
 function easyPromise() {
   var dfd = new jQuery.Deferred();
@@ -481,10 +541,6 @@ function createConsumptionTitle(value) {
                       );
 }
 var page_main = new Page("#page-main", {
-
-  oncreate: function() {
-    this.onbutton('.btn-insert-base-data', this.insert_base_data);
-  },
   show: function() {
     var target_ul = this.find('.field-list');
 
@@ -551,7 +607,6 @@ function addConsumptionEntry(drinks, servings, value) {
   var div = $('#consume-entries');
 
   var fs = $('<fieldset data-role="controlgroup" data-type="horizontal"></fieldset>');
-  //div.append(fs);
 
   var select_amount = $('<select name="amount" data-iconpos="noicon">');
   var select_serv = $('<select name="serving" data-iconpos="noicon">');
@@ -561,20 +616,26 @@ function addConsumptionEntry(drinks, servings, value) {
   select_serv.append( $( '<option value=""></option>' ) );
   select_drink.append( $( '<option value=""></option>' ) );
 
-  populateOptions(getRange(20), 
-                  function(i) { return i },
-                  value == null ? null : value.amount,
-                  select_amount);
+  populateOptions(
+    getRange(20), 
+    function(i) { return i },
+    value == null ? null : value.amount,
+    select_amount
+  );
 
-  populateOptions(servings, 
-                  function(i) { return i.value.name }, 
-                  value == null ? null : value.servings,
-                  select_serv);
+  populateOptions(
+    servings, 
+    function(i) { return i.value.name }, 
+    value == null ? null : value.servings,
+    select_serv
+  );
 
-  populateOptions(drinks, 
-                  function(i) { return i.value.name }, 
-                  value == null ? null : value.drink,
-                  select_drink);
+  populateOptions(
+    drinks, 
+    function(i) { return i.value.name }, 
+    value == null ? null : value.drink,
+    select_drink
+  );
 
 
   var delete_entry = $('<button title="remove entry" data-inline="true" class="ui-btn ui-icon-delete ui-btn-icon-right">&nbsp;</button>');
@@ -698,10 +759,8 @@ var page_consumption_details = new Page("#page-consumption-details", {
 
 
 var page_drinks = new Page("#page-drinks", {
-
   show : function() {
     var target_ul = this.find('.field-drinks');
-
     return getdb().objectStore(STORE_NAME_DRINKS).each(function (item) {
       target_ul.append(createEditListEntry(item.value.name,
                                            page_drink_details,
@@ -767,7 +826,6 @@ var page_drink_details = new Page("#page-drink-details", {
 var page_servings = new Page("#page-servings", {
   show : function() {
     var target_ul = this.find('.field-servings');
-
     return getdb().objectStore(STORE_NAME_SERVINGS).each(function(item) {
       target_ul.append(createEditListEntry(String.format("{0} -- {1}l", item.value.name, item.value.liter),
                                            page_serving_details,
@@ -777,7 +835,6 @@ var page_servings = new Page("#page-servings", {
   hide : function() { 
     this.find('.field-servings').empty();
   }
-
 });
 
 
@@ -828,12 +885,7 @@ var page_serving_details = new Page("#page-serving-details", {
 
 var page_show_error = new Page("#page-show-error", {
   show : function () {
-    if (last_error == null) {
-      this.find(".field-error").text("Unknown error");
-    }
-    else {
-      this.find(".field-error").text(last_error);
-    }
+    this.find(".field-error").text(last_error || "Unknown error");
   },
   hide : function () {
     this.find('.field-error').text('');
@@ -871,17 +923,17 @@ function get_db_dump() {
 }
 
 var decode_dump = makeExceptionHandlingPromise(function(input) {
-    if (input == "") {
-      throw new Error("No data given. Make sure a dump is entered in the input field.");
-    }
-    // copy-paste might add spaces at the front, re-sub them
-    var text = b64_to_utf8(input.replace(/^\s+|\s+$/g,''));
-    return JSON.parse(text);
+  if (input == "") {
+    throw new Error("No data given. Make sure a dump is entered in the input field.");
+  }
+  // copy-paste might add spaces at the front, re-sub them
+  var text = b64_to_utf8(input.replace(/^\s+|\s+$/g,''));
+  return JSON.parse(text);
 });
 
 var encode_dump = makeExceptionHandlingPromise(function(input) {
-    console.assert(input != null);
-    return utf8_to_b64(JSON.stringify(input));
+  console.assert(input != null);
+  return utf8_to_b64(JSON.stringify(input));
 });
 
 var page_db_dump = new Page("#page-dump", {
@@ -968,6 +1020,16 @@ var page_db_dump = new Page("#page-dump", {
     }, promiseErrorHandler("get db dump email"));
   },
   show : function () {
+    var opts = $.getUrlVars();
+    if ( "action" in opts ) {
+      if (opts.action == "recreate") {
+        this.find('.btn-recreate').trigger('click');
+      }
+      else if (opts.action == "load" && opts.data != null) {
+        this.find('.field-dump').val(opts.data);
+        this.find('.btn-load').trigger('click');
+      }
+    }
   },
   hide : function () {
     this.clear();
@@ -976,18 +1038,6 @@ var page_db_dump = new Page("#page-dump", {
 
 
 
-// simple promise, always resolved, d/c about result
-function invokeLater(handler) {
-
-  var dfd = new jQuery.Deferred();
-
-  window.setTimeout(function() {
-    handler().then(dfd.resolve, dfd.reject);
-  }, 0);
-
-
-  return dfd.promise();
-}
 
 
 
@@ -1067,7 +1117,7 @@ var page_stats = new Page("#page-stats", {
 
 
         // weekly goal intake
-        var goal = 20;
+        var goal = +(that.find('.field-goal').text());
         var current;
         var this_ww = format_ww(new Date());
         if ( per_week[this_ww] == null ) {
@@ -1082,6 +1132,7 @@ var page_stats = new Page("#page-stats", {
     })
   },
   hide : function () {
-      this.find('.field-weekly tbody').empty();
+    this.find('.field-weekly tbody').empty();
+    this.find('.field-chart').hide();
   }
 });

@@ -26,10 +26,8 @@
 <script src="drinking.js"></script>
 
 <style>
-.field-chart canvas {
-  margin-left: auto;
-  margin-right: auto;
-  
+.field-chart {
+  margin: 0px auto;
 }
 .field-dump {
   font-family: Monospace;
@@ -226,8 +224,9 @@ td, th {
     <p>Contact:
     <a href="mailto:mru@sisyphus.teil.cc">mru@sisyphus.teil.cc</a>
     </p>
+    <p><a href="https://github.com/mru00/drinkingdiary">GitHub</a></p>
 
-    <p>Version: <!--Vb-->Sun Oct 19 18:11:54 CEST 2014<!--Ve--></p>
+    <p>Version: <!--Vb-->Sun Oct 19 20:38:12 CEST 2014<!--Ve--></p>
 
     <a href="#page-main" data-direction="reverse" class="btn-back ui-btn">Back</a>
   </div>
@@ -269,7 +268,7 @@ td, th {
   <div data-role="header"><h1>Statistics</h1></div>
   <div role="main" class="ui-content">
 
-    <label>This weeks consumption compared to a goal of 20 units:
+    <label>This week's consumption compared to a goal of <span class="field-goal">20</span> units per week:
       <div class="field-chart"></div></label>
 
     <!--textarea class="field-stats" id="stats-area"></textarea-->
