@@ -22,11 +22,23 @@
 <script src="http://nparashuram.com/IndexedDBShim/dist/IndexedDBShim.min.js"></script>
 <script src="http://nparashuram.com/jquery-indexeddb/dist/jquery.indexeddb.js"></script>
 
+<script src="circlechart.js"></script>
 <script src="drinking.js"></script>
 
 <style>
+.field-chart canvas {
+  margin-left: auto;
+  margin-right: auto;
+  
+}
 .field-dump {
   font-family: Monospace;
+}
+.field-error {
+  font-weight: bold;
+  font-style: italic;
+  margin-left: 3em;
+  margin-bottom: 3em;
 }
 .field-weelky table {
   border-collapse: collapse;
@@ -190,8 +202,8 @@ td, th {
   <div data-role="header"><h1>&#9888; Error &#9888;</h1></div>
   <div role="main" class="ui-content">
 
-    <p>There was an error.</p>
-    <textarea class="field-error" readonly></textarea>
+    <p>There was an error:</p>
+    <div class="field-error"></div>
 
     <a href="#page-main" data-rel="back" class="btn-cancel">Back</a>
 
@@ -215,7 +227,7 @@ td, th {
     <a href="mailto:mru@sisyphus.teil.cc">mru@sisyphus.teil.cc</a>
     </p>
 
-    <p>Version: <!--Vb-->Sun Oct 19 16:20:29 CEST 2014<!--Ve--></p>
+    <p>Version: <!--Vb-->Sun Oct 19 18:11:54 CEST 2014<!--Ve--></p>
 
     <a href="#page-main" data-direction="reverse" class="btn-back ui-btn">Back</a>
   </div>
@@ -257,14 +269,17 @@ td, th {
   <div data-role="header"><h1>Statistics</h1></div>
   <div role="main" class="ui-content">
 
+    <label>This weeks consumption compared to a goal of 20 units:
+      <div class="field-chart"></div></label>
+
     <!--textarea class="field-stats" id="stats-area"></textarea-->
 
-    <a href="https://en.wikipedia.org/wiki/Unit_of_alcohol">Wikipedia on alcohol units</a>
     <table class="field-weekly">
       <thead><tr><th>work week</th><th>alc. units</th><th>avg per day</th><th>days drinking</th></tr></thead>
       <tbody></tbody>
     </table>
 
+    <p><a href="https://en.wikipedia.org/wiki/Unit_of_alcohol">Wikipedia on alcohol units</a></p>
     <a href="#page-main" data-direction="reverse" class="btn-back ui-btn">Back</a>
   </div>
 </div>

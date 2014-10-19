@@ -205,7 +205,7 @@ function Page(selector, props) {
       // mediator to get 'this' correctly in handler functions
       // $('...').click(page_obj.handle(page_obj.callback))
       return function() {
-        return handler_fn.call(self, arguments);
+        return handler_fn.apply(self, arguments);
       }
     },
     is_error_page_: function() {
@@ -376,9 +376,7 @@ $(function() {
       page_main.show();
     }
     end_loading_animation();
-  }, promiseErrorHandler("open db"));
-
-
+  }, promiseErrorHandler("Open database"));
 });
 
 
@@ -602,7 +600,6 @@ var page_consumption_details = new Page("#page-consumption-details", {
       this.find('.field-date').attr('readonly', 'readonly');
     }
 
-    start_loading_animation();
 
     var self = this;
     var input_date = this.find('.field-date');
@@ -771,7 +768,6 @@ var page_servings = new Page("#page-servings", {
   show : function() {
     var target_ul = this.find('.field-servings');
 
-    start_loading_animation();
     return getdb().objectStore(STORE_NAME_SERVINGS).each(function(item) {
       target_ul.append(createEditListEntry(String.format("{0} -- {1}l", item.value.name, item.value.liter),
                                            page_serving_details,
@@ -832,11 +828,15 @@ var page_serving_details = new Page("#page-serving-details", {
 
 var page_show_error = new Page("#page-show-error", {
   show : function () {
-    if (last_error != null)
-      this.find(".field-error").val(last_error);
+    if (last_error == null) {
+      this.find(".field-error").text("Unknown error");
+    }
+    else {
+      this.find(".field-error").text(last_error);
+    }
   },
   hide : function () {
-    this.find('.field-error').val('');
+    this.find('.field-error').text('');
   }
 });
 
@@ -995,6 +995,14 @@ function invokeLater(handler) {
 
 var page_stats = new Page("#page-stats", {
 
+  oncreate: function() {
+    this.find('.field-chart').hide();
+    this.find('.field-chart').circlechart({width: 200, 
+                                          height:200, 
+                                          font: "normal 45pt sans-serif",
+                                          value: 0,
+                                          visible: false});
+  },
   show : function () {
     var that = this;
     var per_week = {};
@@ -1056,6 +1064,20 @@ var page_stats = new Page("#page-stats", {
                                 "</tr>");
           table.append(entry);
         }
+
+
+        // weekly goal intake
+        var goal = 20;
+        var current;
+        var this_ww = format_ww(new Date());
+        if ( per_week[this_ww] == null ) {
+          current = 0;
+        }
+        else {
+          current = per_week[this_ww].sum;
+        }
+        that.find('.field-chart').circlechart('option', 'value', 100*current/goal);
+        that.find('.field-chart').show();
       }));
     })
   },
