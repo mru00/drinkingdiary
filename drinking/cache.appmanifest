@@ -1,11 +1,12 @@
 CACHE MANIFEST
 
-# Serial Sun Oct 19 01:37:14 CEST 2014
+# Serial Sun Oct 19 13:59:07 CEST 2014
 
 
 CACHE:
 drinking.js
 iso8601.min.js
+base64v1_0.js
 cocktail_128.png
 cocktail_16.png
 cocktail_57.png

@@ -127,6 +127,10 @@ function Page(selector, props) {
     show_: function() {
       this.show();
     },
+    show_with_value: function(value) {
+      this.value = value;
+      $.mobile.changePage(this.selector);
+    },
     oncreate_: function() {
       if (typeof this.oncreate != "undefined") {
         this.oncreate();
@@ -261,24 +265,28 @@ $(document).on('pagebeforecreate', '', function (event) {
 
 
 
+function createEditListEntry(name, target_page, value) {
+  var elem = $('<li><a href="#" class="btn-edit btn ui-btn ui-btn-icon-right ui-icon-edit">'+name+'</a></li>'); 
+  elem.click(function() { target_page.show_with_value(value); });
+  return elem;
+}
 
 
 
 
 
-function createConsumptionHTML(value) {
+function createConsumptionTitle(value) {
   var now = new Date();
   var today = formatDate(now);
   var yesterday = formatDate(previousDay(now));
   var is_today = value.date == today;
   var is_yesterday = value.date == yesterday;
-  return $(String.format('<li><a href="#page-consumption-details" class="btn-edit ui-btn ui-btn-icon-right ui-icon-edit">{0}{2}: {1}</a></li>',
-                         value.date,
-                         value.drinks
-                         .map(function(drink) {return String.format("{0} {1} {2}", drink.amount, drink.servings, drink.drink); })
-                         .join(', '),
-                         is_today ? " (today)" : is_yesterday ? " (yesterday)" : ""
-                        ));
+  return String.format('{0}: {1}',
+                       is_today ? "today" : is_yesterday ? "yesterday" : value.date,
+                       value.drinks
+                       .map(function(drink) {return String.format("{0} {1} {2}", drink.amount, drink.servings, drink.drink); })
+                       .join(', ')
+                      );
 }
 var page_main = new Page("#page-main", {
 
@@ -297,18 +305,18 @@ var page_main = new Page("#page-main", {
     // endless error->main->error loops.
     getdb().objectStore(STORE_NAME_CONSUMPTIONS).get(yesterday).then(function(value) {
       if (value != null) {
-        var elem = createConsumptionHTML(value);
-        target_ul.append(elem);
-        elem.click(function() { page_consumption_details.value = yesterday; });
+        target_ul.append(createEditListEntry(createConsumptionTitle(value),
+                                             page_consumption_details,
+                                             yesterday));
       }
 
       return getdb().objectStore(STORE_NAME_CONSUMPTIONS).get(today)
 
     }).then(function(value) {
       if (value != null) {
-        var elem = createConsumptionHTML(value);
-        target_ul.append(elem);
-        elem.click(function() { page_consumption_details.value = today; });
+        target_ul.append(createEditListEntry(createConsumptionTitle(value),
+                                             page_consumption_details,
+                                             today));
       }
       end_loading_animation();
     });
@@ -330,10 +338,9 @@ var page_consumptions = new Page("#page-consumptions", {
     var target_ul = this.find('.field-list');
 
     _(getdb().objectStore(STORE_NAME_CONSUMPTIONS).each(function(item) {
-      var value = item.value;
-      var elem = createConsumptionHTML(value);
-      target_ul.append(elem);
-      elem.click(function() { page_consumption_details.value = item.key; });
+      target_ul.append(createEditListEntry(createConsumptionTitle(item.value),
+                                           page_consumption_details,
+                                           item.key));
     }), "list consumptions");
   },
   hide : function() {
@@ -508,19 +515,20 @@ var page_consumption_details = new Page("#page-consumption-details", {
 
 
 
-function createDrinkHTML(value) {
-  return $('<li><a href="#page-drink-details" class="btn-edit ui-btn ui-btn-icon-right ui-icon-edit">'+value.name+'</a></li>');
-}
 var page_drinks = new Page("#page-drinks", {
 
   show : function() {
     var target_ul = this.find('.field-drinks');
 
-    _(getdb().objectStore(STORE_NAME_DRINKS).each(function (item) {
-      var elem = createDrinkHTML(item.value);
-      target_ul.append(elem);
-      elem.click(function() { page_drink_details.value = item.value });
-    }), "each drink");
+    start_loading_animation();
+    getdb().objectStore(STORE_NAME_DRINKS).each(function (item) {
+      target_ul.append(createEditListEntry(item.value.name,
+                                           page_drink_details,
+                                           item.value));
+    }).then(function() {
+      end_loading_animation();
+    }, promiseErrorHandler("each drink"));
+
   },
   hide : function() {
     this.find('.field-drinks').empty();
@@ -577,22 +585,18 @@ var page_drink_details = new Page("#page-drink-details", {
 
 
 
-
-function createServingHTML(value) {
-  return $(String.format('<li><a href="#page-serving-details" class="btn-edit btn ui-btn ui-btn-icon-right ui-icon-edit">{0} -- {1}l</a></li>', 
-                         value.name, 
-                         value.liter));
-}
 var page_servings = new Page("#page-servings", {
   show : function() {
     var target_ul = this.find('.field-servings');
 
-    _(getdb().objectStore(STORE_NAME_SERVINGS).each(function(item) {
-      var value = item.value;
-      var elem = createServingHTML(item.value);
-      target_ul.append(elem);
-      elem.click(function() { page_serving_details.value = value; });
-    }), "each serving");
+    start_loading_animation();
+    getdb().objectStore(STORE_NAME_SERVINGS).each(function(item) {
+      target_ul.append(createEditListEntry(String.format("{0} -- {1}l", item.value.name, item.value.liter),
+                                           page_serving_details,
+                                           item.value));
+    }).then(function() {
+      end_loading_animation();
+    }, promiseErrorHandler("Load servings"));
   },
   hide : function() { 
     this.find('.field-servings').empty();
@@ -659,11 +663,11 @@ var page_show_error = new Page("#page-show-error", {
 
 
 function utf8_to_b64( str ) {
-    return window.btoa(encodeURIComponent( escape( str )));
+  return B64.encode(str);
 }
 
 function b64_to_utf8( str ) {
-    return unescape(decodeURIComponent(window.atob( str )));
+  return B64.decode(str);
 }
 
 
@@ -750,6 +754,19 @@ function get_db_dump() {
   return dfd.promise();
 }
 
+function parse_dump(input) {
+  var dfd = new jQuery.Deferred();
+  try {
+    // copy-paste might add spaces at the front, re-sub them
+    var text = b64_to_utf8(input.replace(/^\s+|\s+$/g,''));
+    var data = JSON.parse(text);
+    dfd.resolve(data);
+  }
+  catch (err) {
+    dfd.reject(err);
+  }
+  return dfd.promise();
+}
 
 var page_db_dump = new Page("#page-dump", {
   oncreate: function() {
@@ -769,11 +786,11 @@ var page_db_dump = new Page("#page-dump", {
     start_loading_animation();
     getdb().deleteDatabase().then(function() {
       return opendb();
-    }, promiseErrorHandler("delete database")).then(function() {
+    }).then(function() {
       that.dump();
       end_loading_animation();
       alert("database recreated");
-    }, promiseErrorHandler("open database"));
+    }, promiseErrorHandler("Recreate database"));
   },
   load: function() {
 
@@ -781,32 +798,27 @@ var page_db_dump = new Page("#page-dump", {
       return;
     }
     var that = this;
-    var text = b64_to_utf8(this.find('.field-dump').val());
-    var data;
-    try {
-      data = JSON.parse(text);
-    }
-    catch (err) {
-      promiseErrorHandler("failed to parse dump")(err);
-      return;
-    }
+    var dump_data;
 
     start_loading_animation();
-    getdb().transaction([STORE_NAME_CONSUMPTIONS, STORE_NAME_DRINKS, STORE_NAME_SERVINGS]).then(function() {
+    parse_dump(this.find('.field-dump').val()).then(function (data) {
+      dump_data = data;
+      return getdb().transaction([STORE_NAME_CONSUMPTIONS, STORE_NAME_DRINKS, STORE_NAME_SERVINGS]);
+    }).then(function () {
       that.dump();
+      alert("Dump successfully loaded");
       end_loading_animation();
-      alert("data loaded");
     },
-    promiseErrorHandler("load dump"),
+    promiseErrorHandler("Load dump"),
     function(trans) {
 
-      data.consumptions.forEach(function(value) {
+      dump_data.consumptions.forEach(function(value) {
         trans.objectStore(STORE_NAME_CONSUMPTIONS).put(value);
       });
-      data.drinks.forEach(function(value) {
+      dump_data.drinks.forEach(function(value) {
         trans.objectStore(STORE_NAME_DRINKS).put(value);
       });
-      data.servings.forEach(function(value) {
+      dump_data.servings.forEach(function(value) {
         trans.objectStore(STORE_NAME_SERVINGS).put(value);
       });
 
@@ -814,9 +826,14 @@ var page_db_dump = new Page("#page-dump", {
   },
   dump: function() {
     var that = this;
+    var encoded;
     start_loading_animation();
     get_db_dump().then(function(dump) {
-      that.find('.field-dump').val(utf8_to_b64(JSON.stringify(dump)));
+      //sanity check: test if encoded is decodable
+      encoded = utf8_to_b64(JSON.stringify(dump));
+      return parse_dump(encoded);
+    }).then(function() {
+      that.find('.field-dump').val(encoded);
       end_loading_animation();
     }, promiseErrorHandler("get db dump field"));
   },
@@ -825,7 +842,7 @@ var page_db_dump = new Page("#page-dump", {
     start_loading_animation();
     get_db_dump().then(function(dump) {
       var data = utf8_to_b64(JSON.stringify(dump));
-      var body=encodeURI("The database dump: \n\n\n" + data + "\n\n\n -- the drinking diary");
+      var body=encodeURI("The database dump: \n\n\n" + data + "\n\n\n-- \nthe drinking diary");
       var subject=encodeURI("Drinking diary database dump");
       that.find('#field-email').attr('href', "mailto:?Subject="+subject+"&body="+body);
       fireEvent( that.find('#field-email').get(0), 'click');
@@ -884,9 +901,12 @@ var page_stats = new Page("#page-stats", {
         var consumption = { date: item.date, units: 0 };
         item.drinks.forEach(function (d) {
           var units = consumption_to_unit(drink_alc[d.drink], d.amount, ser_lit[d.servings]);
-          console.assert(units < 40);
-          consumption.units += units;
-          console.assert(consumption.units != null && ! isNaN(consumption.units));
+          if (units != null && ! isNaN(units)) {
+            consumption.units += units;
+          }
+          else {
+            consumption.is_incomplete = true;
+          }
         });
         per_week[ww].sum += consumption.units;
         per_week[ww].cons.push(consumption);
@@ -913,13 +933,11 @@ var page_stats = new Page("#page-stats", {
         table.append(entry);
       }
 
-      //that.find('.field-stats').val(JSON.stringify(per_week));
       end_loading_animation();
     }, promiseErrorHandler("get dump, stats"));
 
   },
   hide : function () {
-      //this.find('.field-stats').val('');
       this.find('.field-weekly tbody').empty();
   }
 });
