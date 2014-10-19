@@ -37,6 +37,9 @@ table.field-weelky,  tr.field-weelky,  td.field-weelky, th.field-weelky {
 td, th {
   padding 15px;
 }
+.ui-title {
+  margin: 0 5% !important;
+}
 </style>
 
 </head>
@@ -184,14 +187,15 @@ td, th {
 
 
 <div data-role="page" id="page-show-error" class="page">
-  <div data-role="header"><h1>Error</h1></div>
+  <div data-role="header"><h1>&#9888; Error &#9888;</h1></div>
   <div role="main" class="ui-content">
 
     <p>There was an error.</p>
     <textarea class="field-error" readonly></textarea>
 
-    <p>If the database is really broken, try re-creating the database in <a href="#page-dump">manage database</a> (<q>Drop and recreate database</q>).</p>
     <a href="#page-main" data-rel="back" class="btn-cancel">Back</a>
+
+    <p><small>If the database is really really broken, try re-creating the database in <a href="#page-dump">manage database</a> (<q>Drop and recreate database</q>).</small></p>
   </div>
 </div>
 
@@ -211,7 +215,7 @@ td, th {
     <a href="mailto:mru@sisyphus.teil.cc">mru@sisyphus.teil.cc</a>
     </p>
 
-    <p>Version: <!--Vb-->Sun Oct 19 13:59:07 CEST 2014<!--Ve--></p>
+    <p>Version: <!--Vb-->Sun Oct 19 16:20:29 CEST 2014<!--Ve--></p>
 
     <a href="#page-main" data-direction="reverse" class="btn-back ui-btn">Back</a>
   </div>
@@ -227,7 +231,7 @@ td, th {
       <button class="btn-email ui-btn ui-icon-forward ui-btn-icon-left">Send via email</button></label>
 
     <label>String representation of database contents. Use your device's Copy-paste functionality, to e.g. send data via email, store in notes as backup, etc.
-      <input type="text" class="field-dump" placeholder="data" data-clear-btn="true"></label>
+      <input type="text" class="field-dump" placeholder="dump data" data-clear-btn="true"></label>
 
     <label>Generate string represenation of database content:
       <button class="btn-dump ui-btn ui-icon-info ui-btn-icon-left">Create dump</button></label>

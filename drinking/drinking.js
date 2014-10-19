@@ -53,6 +53,88 @@ Date.prototype.getWeek = function () {
   // 604800000 = 7 * 24 * 3600 * 1000
 }
 
+function getRange(n) {
+  return Array(n).join().split(',').map(function(e, i) { return i+1; });
+}  
+
+
+function utf8_to_b64( str ) {
+  return B64.encode(str);
+}
+
+function b64_to_utf8( str ) {
+  return B64.decode(str);
+}
+
+
+// required to send email (follow 'href="mailto:"' link) programatically on a button.click event
+/**
+ * Fire an event handler to the specified node. Event handlers can detect that the event was fired programatically
+ * by testing for a 'synthetic=true' property on the event object
+ * @param {HTMLNode} node The node to fire the event handler on.
+ * @param {String} eventName The name of the event without the "on" (e.g., "focus")
+ */
+function fireEvent(node, eventName) {
+  // Make sure we use the ownerDocument from the provided node to avoid cross-window problems
+  var doc;
+  if (node.ownerDocument) {
+    doc = node.ownerDocument;
+  } else if (node.nodeType == 9 /** DOCUMENT_NODE */){
+    // the node may be the document itself
+    doc = node;
+  } else {
+    throw new Error("Invalid node passed to fireEvent: " + +node.tagName + "#" + node.id);
+  }
+
+  if (node.fireEvent) {
+    // IE-style
+    var event = doc.createEventObject();
+    event.synthetic = true; // allow detection of synthetic events
+    node.fireEvent("on" + eventName, event);
+  } else if (node.dispatchEvent) {
+    // Gecko-style approach is much more difficult.
+    var eventClass = "";
+
+    // Different events have different event classes.
+    // If this switch statement can't map an eventName to an eventClass,
+    // the event firing is going to fail.
+    switch (eventName) {
+      case "click":
+      case "mousedown":
+      case "mouseup":
+        eventClass = "MouseEvents";
+        break;
+
+      case "focus":
+      case "change":
+      case "blur":
+      case "select":
+        eventClass = "HTMLEvents";
+        break;
+
+      default:
+        throw "JSUtil.fireEvent: Couldn't find an event class for event '" + eventName + "'.";
+        break;
+    }
+    var event = doc.createEvent(eventClass);
+    var bubbles = eventName == "change" ? false : true;  
+    event.initEvent(eventName, bubbles, true); // All events created as bubbling and cancelable.
+
+    event.synthetic = true; // allow detection of synthetic events
+    node.dispatchEvent(event);
+  }
+};
+
+function format_ww(date_obj) {
+  return String.format("{0}-{1}", date_obj.getFullYear(), date_obj.getWeek());
+}
+
+
+function consumption_to_unit(abv, amount, liter) {
+  // https://en.wikipedia.org/wiki/Unit_of_alcohol#Formula
+  return  +abv * amount * liter;
+}
+
 
 
 var loading_counter = 0;
@@ -78,12 +160,14 @@ function end_loading_animation() {
 
 
 var last_error = null;
+var going_to_error_page = false;
 function promiseErrorHandler(msg) {
   return function(a, e) {
     if (a == null) a = { message: "unknown" };
     if (typeof a.message != "string") a.message= "unknown";
     console.log(msg + ": Action error: " + a.message, a, e);
     last_error = msg + ": " + a.message;
+    going_to_error_page = true;
     $.mobile.changePage('#page-show-error');
   }
 }
@@ -124,8 +208,33 @@ function Page(selector, props) {
         return handler_fn.call(self, arguments);
       }
     },
+    is_error_page_: function() {
+      return this.selector == "#page-show-error";
+    },
     show_: function() {
-      this.show();
+      if ( this.is_error_page_() ) {
+        this.show__();
+      }
+      else {
+        // don't show when coming from error page.
+        if ( going_to_error_page ) {
+          going_to_error_page = false;
+        }
+        else {
+          this.show__();
+        }
+      }
+    },
+    show__: function() {
+      var that = this;
+      var ret = this.show();
+      // XXX test if ret is a thenable
+      if (ret != null) {
+        start_loading_animation();
+        ret.then(function() {
+          end_loading_animation();
+        }, promiseErrorHandler("Show page " + that.selector));
+      }
     },
     show_with_value: function(value) {
       this.value = value;
@@ -137,10 +246,11 @@ function Page(selector, props) {
       }
     },
     hide_: function() {
-      var page = self.jq();
-      self.value = null;
-      self.hide();
-      //page.find('.btn-delete').hide();
+      // don't hide when going to error page
+      if (! going_to_error_page ) {
+        self.value = null;
+        self.hide();
+      }
     }
 
   });
@@ -158,6 +268,18 @@ function Page(selector, props) {
 }
 
 //
+function makeExceptionHandlingPromise(handler) {
+  return function() {
+    var dfd = new jQuery.Deferred();
+    try {
+      dfd.resolve(handler.apply(this, arguments));
+    }
+    catch (err) {
+      dfd.reject(err);
+    }
+    return dfd.promise();
+  }
+}
 //
 // diagnostic promise handler
 function _(promise, title){
@@ -176,6 +298,11 @@ function _(promise, title){
 }
 
 
+function easyPromise() {
+  var dfd = new jQuery.Deferred();
+  dfd.resolve.apply(arguments);
+  return dfd.promise();
+}
 
 function getdb() { return $.indexedDB(DB_NAME); };
 function opendb() {
@@ -263,6 +390,64 @@ $(document).on('pagebeforecreate', '', function (event) {
 
 
 
+// validator promises:
+
+var validateConsumption = makeExceptionHandlingPromise(function(value) {
+
+  // XXX should also check if drink, serving really exists
+  //
+  console.assert(value != null);
+  console.assert(value.drinks != null);
+  if ( (new Date(value.date)) == null ) {
+    throw new Error ("Invalid date specified");
+  }
+  if ( value.drinks.length == 0) {
+    throw new Error ("No drinks specified!");
+  }
+  value.drinks.forEach(function (d) {
+
+    if (d.amount == "") {
+      throw new Error("No amount specified");
+    }
+    if (d.servings == "") {
+      throw new Error ("No serving size specified");
+    }
+    if (d.drink == "") {
+      throw new Error ("No drink specified");
+    }
+
+  });
+  return value;
+});
+
+
+var validateDrink = makeExceptionHandlingPromise(function(value) {
+
+  console.assert(value != null);
+  if (value.name == null || value.name == "") {
+    throw new Error ("No name specified!");
+  }
+  if (value.alc == null || value.alc == "") {
+    throw new Error ("No ABV specified");
+  }
+  return value;
+});
+
+
+var validateServing = makeExceptionHandlingPromise(function(value) {
+  console.assert(value != null);
+  if (value.name == null || value.name == "") {
+    throw new Error ("No name specified!");
+  }
+  if (value.liter == null || value.liter == "") {
+    throw new Error ("No liters specified");
+  }
+  return value;
+});
+
+
+
+// html helper functions
 
 
 function createEditListEntry(name, target_page, value) {
@@ -271,6 +456,15 @@ function createEditListEntry(name, target_page, value) {
   return elem;
 }
 
+function populateOptions(collection, accessor, selected, target) {
+  collection.forEach(function(item) {
+    var elem = $( String.format('<option value="{0}">{1}</option>', encodeURI(accessor(item)), accessor(item)) );
+    target.append( elem );
+    if (selected != null && accessor(item) == selected) {
+      elem.attr('selected',"selected").trigger('change');
+    }
+  });
+}
 
 
 
@@ -294,7 +488,6 @@ var page_main = new Page("#page-main", {
     this.onbutton('.btn-insert-base-data', this.insert_base_data);
   },
   show: function() {
-    start_loading_animation();
     var target_ul = this.find('.field-list');
 
     var now = new Date();
@@ -303,7 +496,7 @@ var page_main = new Page("#page-main", {
 
     // XXX intentinally no error handling here. bad, but better than
     // endless error->main->error loops.
-    getdb().objectStore(STORE_NAME_CONSUMPTIONS).get(yesterday).then(function(value) {
+    return getdb().objectStore(STORE_NAME_CONSUMPTIONS).get(yesterday).then(function(value) {
       if (value != null) {
         target_ul.append(createEditListEntry(createConsumptionTitle(value),
                                              page_consumption_details,
@@ -318,7 +511,7 @@ var page_main = new Page("#page-main", {
                                              page_consumption_details,
                                              today));
       }
-      end_loading_animation();
+      return easyPromise();
     });
   },
   hide : function() { 
@@ -337,11 +530,11 @@ var page_consumptions = new Page("#page-consumptions", {
   show : function() {
     var target_ul = this.find('.field-list');
 
-    _(getdb().objectStore(STORE_NAME_CONSUMPTIONS).each(function(item) {
+    return getdb().objectStore(STORE_NAME_CONSUMPTIONS).each(function(item) {
       target_ul.append(createEditListEntry(createConsumptionTitle(item.value),
                                            page_consumption_details,
                                            item.key));
-    }), "list consumptions");
+    });
   },
   hide : function() {
     this.find('.field-list').empty();
@@ -353,19 +546,7 @@ var page_consumptions = new Page("#page-consumptions", {
 
 
 
-function populateOptions(collection, accessor, selected, target) {
-  collection.forEach(function(item) {
-    var elem = $( String.format('<option value="{0}">{1}</option>', encodeURI(accessor(item)), accessor(item)) );
-    target.append( elem );
-    if (selected != null && accessor(item) == selected) {
-      elem.attr('selected',"selected").trigger('change');
-    }
-  });
-}
 
-function getRange(n) {
-  return Array(n).join().split(',').map(function(e, i) { return i+1; });
-}  
 
 function addConsumptionEntry(drinks, servings, value) {
 
@@ -408,27 +589,29 @@ function addConsumptionEntry(drinks, servings, value) {
   div.append(fs).trigger('create');
 }
 
-
 var page_consumption_details = new Page("#page-consumption-details", {
 
   show: function() {
     var today;
     if (this.value == null) {
       today = formatDate(new Date());
+      this.find('.field-date').removeAttr('readonly');
     }
     else {
       today = this.value;
+      this.find('.field-date').attr('readonly', 'readonly');
     }
 
     start_loading_animation();
+
     var self = this;
     var input_date = this.find('.field-date');
 
     self.drinks = [];
     self.servings = [];
 
-    getdb().transaction([STORE_NAME_DRINKS, STORE_NAME_SERVINGS, STORE_NAME_CONSUMPTIONS]).then( function() {
-      end_loading_animation();
+    return getdb().transaction([STORE_NAME_DRINKS, STORE_NAME_SERVINGS, STORE_NAME_CONSUMPTIONS]).then( function() {
+      return easyPromise();
     }, 
     promiseErrorHandler("get all consumptions"), 
     function(trans) {
@@ -454,7 +637,7 @@ var page_consumption_details = new Page("#page-consumption-details", {
           input_date.val(today);
           addConsumptionEntry(self.drinks, self.servings);
         }
-      }).fail(promiseErrorHandler("get consumption"));
+      }, promiseErrorHandler("get consumption"));
 
     });
 
@@ -478,9 +661,11 @@ var page_consumption_details = new Page("#page-consumption-details", {
     });
 
     var value = {"date": this.find('.field-date').val(), "drinks": drinks };
-    getdb().objectStore(STORE_NAME_CONSUMPTIONS).put(value).then( function() {
+    validateConsumption(value).then(function(value) {
+      return getdb().objectStore(STORE_NAME_CONSUMPTIONS).put(value);
+    }).then( function() {
       $.mobile.changePage('#page-main');
-    }, promiseErrorHandler("save consumption"));
+    }, promiseErrorHandler("Save consumption"));
   },
   drop : function() {
     getdb().objectStore(STORE_NAME_CONSUMPTIONS)['delete'](this.find('.field-date').val()).then(function() {
@@ -520,15 +705,11 @@ var page_drinks = new Page("#page-drinks", {
   show : function() {
     var target_ul = this.find('.field-drinks');
 
-    start_loading_animation();
-    getdb().objectStore(STORE_NAME_DRINKS).each(function (item) {
+    return getdb().objectStore(STORE_NAME_DRINKS).each(function (item) {
       target_ul.append(createEditListEntry(item.value.name,
                                            page_drink_details,
                                            item.value));
-    }).then(function() {
-      end_loading_animation();
-    }, promiseErrorHandler("each drink"));
-
+    });
   },
   hide : function() {
     this.find('.field-drinks').empty();
@@ -561,11 +742,12 @@ var page_drink_details = new Page("#page-drink-details", {
       'alc': this.find('.field-alc').val(),
       'calories': this.find('.field-calories').val()
     };
-    getdb().objectStore(STORE_NAME_DRINKS).put(value).then(function() {
+
+    validateDrink(value).then(function(value) {
+      return getdb().objectStore(STORE_NAME_DRINKS).put(value);
+    }).then(function() {
       $.mobile.changePage('#page-drinks');
-    }, promiseErrorHandler("save drink"));
-  },
-  validate : function() {
+    }, promiseErrorHandler("Save drink"));
   },
   drop : function() {
     var key = this.find('.field-name').val();
@@ -590,13 +772,11 @@ var page_servings = new Page("#page-servings", {
     var target_ul = this.find('.field-servings');
 
     start_loading_animation();
-    getdb().objectStore(STORE_NAME_SERVINGS).each(function(item) {
+    return getdb().objectStore(STORE_NAME_SERVINGS).each(function(item) {
       target_ul.append(createEditListEntry(String.format("{0} -- {1}l", item.value.name, item.value.liter),
                                            page_serving_details,
                                            item.value));
-    }).then(function() {
-      end_loading_animation();
-    }, promiseErrorHandler("Load servings"));
+    });
   },
   hide : function() { 
     this.find('.field-servings').empty();
@@ -625,9 +805,11 @@ var page_serving_details = new Page("#page-serving-details", {
       'name': this.find('.field-name').val(),
       'liter': this.find('.field-liters').val(),
     };
-    getdb().objectStore(STORE_NAME_SERVINGS).put(value).then(function() {
+    validateServing(value).then(function(value) {
+      return getdb().objectStore(STORE_NAME_SERVINGS).put(value);
+    }).then(function() {
       $.mobile.changePage('#page-servings');
-    }, promiseErrorHandler("save serving"));
+    }, promiseErrorHandler("Save serving"));
   },
   drop : function() {
     var key = this.find('.field-name').val();
@@ -662,72 +844,6 @@ var page_show_error = new Page("#page-show-error", {
 
 
 
-function utf8_to_b64( str ) {
-  return B64.encode(str);
-}
-
-function b64_to_utf8( str ) {
-  return B64.decode(str);
-}
-
-
-// required to send email (follow 'href="mailto:"' link) programatically on a button.click event
-/**
- * Fire an event handler to the specified node. Event handlers can detect that the event was fired programatically
- * by testing for a 'synthetic=true' property on the event object
- * @param {HTMLNode} node The node to fire the event handler on.
- * @param {String} eventName The name of the event without the "on" (e.g., "focus")
- */
-function fireEvent(node, eventName) {
-  // Make sure we use the ownerDocument from the provided node to avoid cross-window problems
-  var doc;
-  if (node.ownerDocument) {
-    doc = node.ownerDocument;
-  } else if (node.nodeType == 9 /** DOCUMENT_NODE */){
-    // the node may be the document itself
-    doc = node;
-  } else {
-    throw new Error("Invalid node passed to fireEvent: " + +node.tagName + "#" + node.id);
-  }
-
-  if (node.fireEvent) {
-    // IE-style
-    var event = doc.createEventObject();
-    event.synthetic = true; // allow detection of synthetic events
-    node.fireEvent("on" + eventName, event);
-  } else if (node.dispatchEvent) {
-    // Gecko-style approach is much more difficult.
-    var eventClass = "";
-
-    // Different events have different event classes.
-    // If this switch statement can't map an eventName to an eventClass,
-    // the event firing is going to fail.
-    switch (eventName) {
-      case "click":
-      case "mousedown":
-      case "mouseup":
-        eventClass = "MouseEvents";
-        break;
-
-      case "focus":
-      case "change":
-      case "blur":
-      case "select":
-        eventClass = "HTMLEvents";
-        break;
-
-      default:
-        throw "JSUtil.fireEvent: Couldn't find an event class for event '" + eventName + "'.";
-        break;
-    }
-    var event = doc.createEvent(eventClass);
-    var bubbles = eventName == "change" ? false : true;  
-    event.initEvent(eventName, bubbles, true); // All events created as bubbling and cancelable.
-
-    event.synthetic = true; // allow detection of synthetic events
-    node.dispatchEvent(event);
-  }
-};
 
 
 
@@ -743,30 +859,30 @@ function get_db_dump() {
     return getdb().objectStore(STORE_NAME_DRINKS).each(function(item) {
       dump.drinks.push(item.value);
     });
-  }, dfd.reject).then(function() {
+  }).then(function() {
     return getdb().objectStore(STORE_NAME_CONSUMPTIONS).each(function(item) {
       dump.consumptions.push(item.value);
     });
-  }, dfd.reject).then(function() {
+  }).then(function() {
     dfd.resolve(dump);
   }, dfd.reject);
 
   return dfd.promise();
 }
 
-function parse_dump(input) {
-  var dfd = new jQuery.Deferred();
-  try {
+var decode_dump = makeExceptionHandlingPromise(function(input) {
+    if (input == "") {
+      throw new Error("No data given. Make sure a dump is entered in the input field.");
+    }
     // copy-paste might add spaces at the front, re-sub them
     var text = b64_to_utf8(input.replace(/^\s+|\s+$/g,''));
-    var data = JSON.parse(text);
-    dfd.resolve(data);
-  }
-  catch (err) {
-    dfd.reject(err);
-  }
-  return dfd.promise();
-}
+    return JSON.parse(text);
+});
+
+var encode_dump = makeExceptionHandlingPromise(function(input) {
+    console.assert(input != null);
+    return utf8_to_b64(JSON.stringify(input));
+});
 
 var page_db_dump = new Page("#page-dump", {
   oncreate: function() {
@@ -801,7 +917,7 @@ var page_db_dump = new Page("#page-dump", {
     var dump_data;
 
     start_loading_animation();
-    parse_dump(this.find('.field-dump').val()).then(function (data) {
+    decode_dump(this.find('.field-dump').val()).then(function (data) {
       dump_data = data;
       return getdb().transaction([STORE_NAME_CONSUMPTIONS, STORE_NAME_DRINKS, STORE_NAME_SERVINGS]);
     }).then(function () {
@@ -829,9 +945,11 @@ var page_db_dump = new Page("#page-dump", {
     var encoded;
     start_loading_animation();
     get_db_dump().then(function(dump) {
+      return encode_dump(dump);
+    }).then(function(_encoded) {
       //sanity check: test if encoded is decodable
-      encoded = utf8_to_b64(JSON.stringify(dump));
-      return parse_dump(encoded);
+      encoded = _encoded;
+      return decode_dump(encoded);
     }).then(function() {
       that.find('.field-dump').val(encoded);
       end_loading_animation();
@@ -858,17 +976,22 @@ var page_db_dump = new Page("#page-dump", {
 
 
 
+// simple promise, always resolved, d/c about result
+function invokeLater(handler) {
+
+  var dfd = new jQuery.Deferred();
+
+  window.setTimeout(function() {
+    handler().then(dfd.resolve, dfd.reject);
+  }, 0);
 
 
-function consumption_to_unit(abv, amount, liter) {
-  // https://en.wikipedia.org/wiki/Unit_of_alcohol#Formula
-  return  +abv * amount * liter;
+  return dfd.promise();
 }
 
 
-function format_ww(date_obj) {
-  return String.format("{0}-{1}", date_obj.getFullYear(), date_obj.getWeek());
-}
+
+
 
 var page_stats = new Page("#page-stats", {
 
@@ -878,64 +1001,63 @@ var page_stats = new Page("#page-stats", {
     var per_day = [];
 
 
-    start_loading_animation();
-    get_db_dump().then(function(dump) {
+    return get_db_dump().then(function(dump) {
 
-      var ser_lit = {};
-      var drink_alc = {};
-      dump.servings.forEach(function (item) {
-        ser_lit[item.name] = item.liter;
-      });
+      return invokeLater(makeExceptionHandlingPromise(function() {
 
-      dump.drinks.forEach(function(item) {
-        drink_alc[item.name] = item.alc;
-      });
+        var ser_lit = {};
+        var drink_alc = {};
+        dump.servings.forEach(function (item) {
+          ser_lit[item.name] = item.liter;
+        });
 
-      dump.consumptions.forEach(function(item) {
+        dump.drinks.forEach(function(item) {
+          drink_alc[item.name] = item.alc;
+        });
 
-        var date_obj = new Date(Date.parse(item.date));
-        var ww = format_ww(date_obj);
-        if ( !(ww in per_week) ) { 
-          per_week[ww] = { sum: 0, cons: [] } 
-        }
-        var consumption = { date: item.date, units: 0 };
-        item.drinks.forEach(function (d) {
-          var units = consumption_to_unit(drink_alc[d.drink], d.amount, ser_lit[d.servings]);
-          if (units != null && ! isNaN(units)) {
-            consumption.units += units;
+        dump.consumptions.forEach(function(item) {
+
+          var date_obj = new Date(Date.parse(item.date));
+          var ww = format_ww(date_obj);
+          if ( !(ww in per_week) ) { 
+            per_week[ww] = { sum: 0, cons: [] } 
+          }
+          var consumption = { date: item.date, units: 0 };
+          item.drinks.forEach(function (d) {
+            var units = consumption_to_unit(drink_alc[d.drink], d.amount, ser_lit[d.servings]);
+            if (units != null && ! isNaN(units)) {
+              consumption.units += units;
+            }
+            else {
+              consumption.is_incomplete = true;
+            }
+          });
+          per_week[ww].sum += consumption.units;
+          per_week[ww].cons.push(consumption);
+          per_day.push(consumption);
+        });
+
+        for (var ww in per_week) {
+          if (per_week[ww].cons.length == 0) {
+            per_week[ww].daily = 0;
           }
           else {
-            consumption.is_incomplete = true;
+            per_week[ww].daily = per_week[ww].cons.reduce(function(a,b) { return b.units +a },0) / per_week[ww].cons.length;
           }
-        });
-        per_week[ww].sum += consumption.units;
-        per_week[ww].cons.push(consumption);
-        per_day.push(consumption);
-      });
-
-      for (var ww in per_week) {
-        if (per_week[ww].cons.length == 0) {
-          per_week[ww].daily = 0;
         }
-        else {
-          per_week[ww].daily = per_week[ww].cons.reduce(function(a,b) { return b.units +a },0) / per_week[ww].cons.length;
+
+        var table = that.find('.field-weekly tbody');
+        for (var ww in per_week) {
+          var entry = $("<tr>"+
+                        "<td>"+ww+"</td>" +
+                          "<td>"+per_week[ww].sum.toFixed(1)+"</td>"+
+                            "<td>"+per_week[ww].daily.toFixed(1)+"</td>"+
+                              "<td>"+per_week[ww].cons.length+"</td>"+
+                                "</tr>");
+          table.append(entry);
         }
-      }
-
-      var table = that.find('.field-weekly tbody');
-      for (var ww in per_week) {
-        var entry = $("<tr>"+
-                      "<td>"+ww+"</td>" +
-                        "<td>"+per_week[ww].sum.toFixed(1)+"</td>"+
-                          "<td>"+per_week[ww].daily.toFixed(1)+"</td>"+
-                            "<td>"+per_week[ww].cons.length+"</td>"+
-                              "</tr>");
-        table.append(entry);
-      }
-
-      end_loading_animation();
-    }, promiseErrorHandler("get dump, stats"));
-
+      }));
+    })
   },
   hide : function () {
       this.find('.field-weekly tbody').empty();
