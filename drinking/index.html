@@ -15,6 +15,7 @@
 
 <link rel="stylesheet" href="http://code.jquery.com/mobile/1.4.4/jquery.mobile-1.4.4.min.css" />
 <script src="http://code.jquery.com/jquery-1.11.1.min.js"></script>
+<script src="http://momentjs.com/downloads/moment.js"></script>
 <script src="http://code.jquery.com/mobile/1.4.4/jquery.mobile-1.4.4.min.js"></script>
 <script src="iso8601.min.js"></script>
 <script src="base64v1_0.js"></script>
@@ -23,6 +24,8 @@
 <script src="http://nparashuram.com/jquery-indexeddb/dist/jquery.indexeddb.js"></script>
 
 <script src="circlechart.js"></script>
+<script src="calendar.js"></script>
+
 <script src="drinking.js"></script>
 
 <style>
@@ -50,6 +53,30 @@ td, th {
 .ui-title {
   margin: 0 5% !important;
 }
+.calendar-day-othermonth {
+  background-color: gray;
+}
+.calendar-day-inmonth {
+  background-color: lightgray;
+  text-align: right;
+}
+.calendar-day {
+  padding-top: .75em;
+  padding-left: .75em;
+}
+.calendar-weekday {
+}
+.calendar-day-today {
+  font-weight: bold;
+  font-style: italic;
+  /*font-size: 120%;*/
+}
+.calendar-table {
+  border: 1px solid black;
+}
+.calendar {
+  margin: 1em;
+}
 </style>
 
 </head>
@@ -65,9 +92,9 @@ td, th {
     </ul>
     <a href="#page-consumption-details" class="btn-add ui-btn">Add consumption</a>
     <a href="#page-consumptions" class="btn-show-consumptions btn ui-btn ui-btn-icon-left ui-icon-bars">Show all consumptions</a>
+    <a href="#page-stats" class="ui-btn ui-icon-info ui-btn-icon-left">Stats</a>
     <a href="#page-drinks" class="ui-btn ui-icon-edit ui-btn-icon-left">Edit drinks</a>
     <a href="#page-servings" class="ui-btn ui-icon-edit ui-btn-icon-left">Edit servings</a>
-    <a href="#page-stats" class="ui-btn ui-icon-info ui-btn-icon-left">Stats</a>
     <a href="#page-about" class="ui-btn ui-icon-info ui-btn-icon-left">About</a>
     <a href="#page-dump" class="ui-btn ui-icon-info ui-btn-icon-left">Manage database</a>
   </div>
@@ -77,7 +104,7 @@ td, th {
 
 
 
-<div data-role="page" id="page-consumptions" class="page">
+<div data-role="page" id="page-consumptions" class="page" data-add-back-btn="true">
 
   <div data-role="header"><h1>My consumptions</h1></div>
 
@@ -108,7 +135,7 @@ td, th {
     <button class="btn-add">Add entry</button>
 
     <button class="btn-save">Save</button>
-    <button class="btn-cancel">Cancel</button>
+    <button class="btn-cancel" data-rel="back">Cancel</button>
     <button class="btn-delete">Delete</button>
   </div>
 </div>
@@ -201,7 +228,8 @@ td, th {
   <div role="main" class="ui-content">
 
     <p>There was an error:</p>
-    <div class="field-error"></div>
+    
+    <div class="field-error ui-bar ui-bar-a"></div>
 
     <a href="#page-main" data-rel="back" class="btn-cancel">Back</a>
 
@@ -224,9 +252,9 @@ td, th {
     <p>Contact:
     <a href="mailto:mru@sisyphus.teil.cc">mru@sisyphus.teil.cc</a>
     </p>
-    <p><a href="https://github.com/mru00/drinkingdiary">GitHub</a></p>
+    <p>Made with &#9829; using <a href="https://github.com/mru00/drinkingdiary">GitHub</a>.</p>
 
-    <p>Version: <!--Vb-->Sun Oct 19 20:38:12 CEST 2014<!--Ve--></p>
+    <p>Version: <!--Vb-->Fri Oct 24 18:57:44 CEST 2014<!--Ve--></p>
 
     <a href="#page-main" data-direction="reverse" class="btn-back ui-btn">Back</a>
   </div>
@@ -237,6 +265,8 @@ td, th {
 <div data-role="page" id="page-dump" class="page">
   <div data-role="header"><h1>Manage database</h1></div>
   <div role="main" class="ui-content">
+
+    <label>db name: <span class="field-db-name"></span></label>
 
     <label>Send data via email
       <button class="btn-email ui-btn ui-icon-forward ui-btn-icon-left">Send via email</button></label>
@@ -249,6 +279,9 @@ td, th {
 
     <label>Load data from input field above. <em>Data might get overwritten!</em>
       <button class="btn-load ui-btn ui-icon-plus ui-btn-icon-left">Load dump</button></label>
+
+    <label>Delete whole database. <em>All data will be lost</em>.
+      <button class="btn-drop ui-btn ui-icon-forbidden ui-btn-icon-left">Drop database</button></label>
 
     <label>Delete whole database and start a new one. <em>All data will be lost</em>.
       <button class="btn-recreate ui-btn ui-icon-forbidden ui-btn-icon-left">Drop and recreate database</button></label>
@@ -268,13 +301,15 @@ td, th {
   <div data-role="header"><h1>Statistics</h1></div>
   <div role="main" class="ui-content">
 
+
     <label>This week's consumption compared to a goal of <span class="field-goal">20</span> units per week:
       <div class="field-chart"></div></label>
 
-    <!--textarea class="field-stats" id="stats-area"></textarea-->
+    <div class="field-calendar-prev-month"></div>
+    <div class="field-calendar"></div>
 
     <table class="field-weekly">
-      <thead><tr><th>work week</th><th>alc. units</th><th>avg per day</th><th>days drinking</th></tr></thead>
+      <thead><tr><th>Work week</th><th>Units</th><th>Avg/day</th><th>Days</th><th>Goal</th></tr></thead>
       <tbody></tbody>
     </table>
 

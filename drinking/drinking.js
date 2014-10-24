@@ -192,6 +192,7 @@ function promiseErrorHandler(msg) {
 }
 
 
+//var DB_NAME = "drinks_dev_3";
 var DB_NAME = "drinks_dev_3";
 var STORE_NAME_DRINKS = "drink";
 var STORE_NAME_SERVINGS = "serving";
@@ -432,7 +433,7 @@ $(function() {
 
 
   opendb().then(function() {
-    if ($.mobile.activePage.attr('id') == 'page-main') {
+    if ($.mobile.activePage != undefined && $.mobile.activePage.attr('id') == 'page-main') {
       page_main.show();
     }
     end_loading_animation();
@@ -722,16 +723,16 @@ var page_consumption_details = new Page("#page-consumption-details", {
     validateConsumption(value).then(function(value) {
       return getdb().objectStore(STORE_NAME_CONSUMPTIONS).put(value);
     }).then( function() {
-      $.mobile.changePage('#page-main');
+      $.mobile.back();
     }, promiseErrorHandler("Save consumption"));
   },
   drop : function() {
     getdb().objectStore(STORE_NAME_CONSUMPTIONS)['delete'](this.find('.field-date').val()).then(function() {
-      $.mobile.changePage('#page-main');
+      $.mobile.back();
     }, promiseErrorHandler("delete consumption"));
   },
   cancel : function() {
-    $.mobile.changePage('#page-main');
+    $.mobile.back();
   },
   add_entry: function() {
     addConsumptionEntry(this.drinks, this.servings);
@@ -939,12 +940,21 @@ var encode_dump = makeExceptionHandlingPromise(function(input) {
 var page_db_dump = new Page("#page-dump", {
   oncreate: function() {
     this.onbutton('.btn-dump', this.dump);
+    this.onbutton('.btn-drop', this.drop);
     this.onbutton('.btn-recreate', this.recreate);
     this.onbutton('.btn-load', this.load);
     this.onbutton('.btn-email', this.email);
+    this.find('.field-db-name').text(DB_NAME);
   },
   clear: function() {
     this.find('.field-dump').val('');
+  },
+  drop: function() {
+    start_loading_animation();
+    getdb().deleteDatabase().then(function() {
+      end_loading_animation();
+      alert("database dropped");
+    }, promiseErrorHandler("drop database"));
   },
   recreate: function() {
     if (! confirm("Really recreate database? This will delete everything!")) {
@@ -1046,12 +1056,30 @@ var page_db_dump = new Page("#page-dump", {
 var page_stats = new Page("#page-stats", {
 
   oncreate: function() {
+    var now = new Date();
+    this.find('.field-calendar-prev-month').calendar({year: now.getFullYear(), month: now.getMonth()});
+    this.find('.field-calendar').calendar({year: now.getFullYear(), month: now.getMonth()+1});
+    $('.calendar').on("calendardateselected", this.on_date_selected);
     this.find('.field-chart').hide();
     this.find('.field-chart').circlechart({width: 200, 
                                           height:200, 
                                           font: "normal 45pt sans-serif",
                                           value: 0,
                                           visible: false});
+
+  },
+  on_date_selected: function(ev, date) {
+    page_consumption_details.show_with_value(formatDate(date));
+  },
+  get_goal: function() {
+    return +(this.find('.field-goal').text());
+  },
+  get_percent: function(units) {
+    return (100*units / this.get_goal()).toFixed(0);
+  },
+  get_color: function(percent) {
+    var color = this.find('.field-chart').circlechart('heatmap2', percent);
+    return color;
   },
   show : function () {
     var that = this;
@@ -1093,7 +1121,17 @@ var page_stats = new Page("#page-stats", {
           per_week[ww].sum += consumption.units;
           per_week[ww].cons.push(consumption);
           per_day.push(consumption);
+
         });
+
+        $('.calendar-day').css('background-color', '');
+        per_day.forEach(function(con) {
+          console.assert(con.date != null);
+          var formattedDate = con.date;
+          $('.calendar-day-'+formattedDate).css('background-color', 
+                                                that.get_color(that.get_percent(con.units)));
+        });
+
 
         for (var ww in per_week) {
           if (per_week[ww].cons.length == 0) {
@@ -1106,27 +1144,28 @@ var page_stats = new Page("#page-stats", {
 
         var table = that.find('.field-weekly tbody');
         for (var ww in per_week) {
+          var percent = that.get_percent(per_week[ww].sum);
+          var color = that.get_color(percent);
           var entry = $("<tr>"+
                         "<td>"+ww+"</td>" +
                           "<td>"+per_week[ww].sum.toFixed(1)+"</td>"+
                             "<td>"+per_week[ww].daily.toFixed(1)+"</td>"+
                               "<td>"+per_week[ww].cons.length+"</td>"+
+                              '<td style="background-color: '+color+'">'+percent+"%</td>"+
                                 "</tr>");
           table.append(entry);
         }
 
 
-        // weekly goal intake
-        var goal = +(that.find('.field-goal').text());
         var current;
         var this_ww = format_ww(new Date());
         if ( per_week[this_ww] == null ) {
           current = 0;
         }
         else {
-          current = per_week[this_ww].sum;
+          current = that.get_percent(per_week[this_ww].sum);
         }
-        that.find('.field-chart').circlechart('option', 'value', 100*current/goal);
+        that.find('.field-chart').circlechart('option', 'value', current);
         that.find('.field-chart').show();
       }));
     })

@@ -1,6 +1,6 @@
 CACHE MANIFEST
 
-# Serial Sun Oct 19 20:38:12 CEST 2014
+# Serial Fri Oct 24 18:57:44 CEST 2014
 
 
 CACHE:
@@ -18,6 +18,9 @@ http://code.jquery.com/jquery-1.11.1.min.js
 http://code.jquery.com/mobile/1.4.4/jquery.mobile-1.4.4.min.js
 http://code.jquery.com/mobile/1.4.4/jquery.mobile-1.4.4.min.css
 http://code.jquery.com/mobile/1.4.4/jquery.mobile-1.4.4.min.map
+
+http://datejs.googlecode.com/files/date.js
+http://momentjs.com/downloads/moment.js
 
 http://code.jquery.com/mobile/1.4.4/images/ajax-loader.gif
 http://nparashuram.com/IndexedDBShim/dist/IndexedDBShim.min.map
