@@ -1,10 +1,11 @@
 CACHE MANIFEST
 
-# Serial Fri Oct 24 18:57:44 CEST 2014
+# Serial Fri Oct 24 18:58:34 CEST 2014
 
 
 CACHE:
 drinking.js
+calendar.js
 circlechart.js
 iso8601.min.js
 base64v1_0.js
