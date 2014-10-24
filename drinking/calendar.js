@@ -50,8 +50,8 @@ function formatDate(date) {
       this.element.addClass('calendar-day');
       this.element.text(this.options.date.getDate());
       this.options.date_formatted = formatDate(this.options.date);
+      this.element.addClass('calendar-day-' + formatDate(this.options.date));
       if (this.options.date.getMonth() == this.options.month-1) {
-        this.element.addClass('calendar-day-' + formatDate(this.options.date));
         if (this.is_today()) {
           this.element.addClass('calendar-day-today');
         }
@@ -80,6 +80,7 @@ function formatDate(date) {
     widgetEventPrefix: "calendar",
     options: {
       year: 2014,
+      first_dow: "Mon",
       month: 3
     },
     format_title: function() {
@@ -110,8 +111,14 @@ function formatDate(date) {
       var weeks = [];
       var current_week = [];
 
-      for( var d = 0; d < first_day.getDay(); d++) {
-        current_week.push(new Date(first_day.getFullYear(), first_day.getMonth(), d - first_day.getDay() +1 ));
+      var fdow_correction = 0;
+      if (this.options.first_dow == "Mon") {
+        fdow_correction = 1;
+      }
+      // XXX there is an ugly conversion between week-start = sunday or week-start=monday
+      // this is all the +- 1 stuff.
+      for( var d = 0; d < first_day.getDay()-fdow_correction; d++) {
+        current_week.push(new Date(first_day.getFullYear(), first_day.getMonth(), d - first_day.getDay()+(1+fdow_correction)));
       }
 
       days_in_month.forEach(function (d) {
@@ -143,7 +150,15 @@ function formatDate(date) {
       return this.get_month_names()[month];
     },
     get_weekday_names: function() {
-      return [ "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" ];
+      if (this.options.first_dow == "Mon") {
+        return [ "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" ];
+      }
+
+      if (this.options.first_dow == "Sun") {
+        return [ "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" ];
+      }
+
+      console.assert (false && "unknown first day of week");
     },
     get_weekday_name: function(weekday) {
       console.assert(weekday >= 0 && weekday < 7);
@@ -171,6 +186,8 @@ function formatDate(date) {
 
       var tr = $('<tr>');
       table.append(tr);
+      var td = $('<td>');
+      tr.append(td);
       this.get_weekday_names().forEach(function(week_day) {
         var td = $('<th>');
         td.addClass('calendar-weekday');
@@ -182,6 +199,11 @@ function formatDate(date) {
         var tr = $('<tr>');
         tr.calendar_week();
         table.append(tr);
+        var td = $('<td>');
+        td.text(ww[0].getWeek());
+        td.addClass('calendar-ww');
+        td.addClass('calendar-ww-' + that.options.year+'-'+ww[0].getWeek());
+        tr.append(td);
         ww.forEach(function(d) {
           var td = $('<td>');
           td.click(function() {that._on_click_date($(this))});

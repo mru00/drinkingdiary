@@ -1142,6 +1142,7 @@ var page_stats = new Page("#page-stats", {
           }
         }
 
+        $('.calendar-ww').css('background-color', '');
         var table = that.find('.field-weekly tbody');
         for (var ww in per_week) {
           var percent = that.get_percent(per_week[ww].sum);
@@ -1154,6 +1155,8 @@ var page_stats = new Page("#page-stats", {
                               '<td style="background-color: '+color+'">'+percent+"%</td>"+
                                 "</tr>");
           table.append(entry);
+
+          $('.calendar-ww-'+ww).css('background-color', color);
         }
 
 
