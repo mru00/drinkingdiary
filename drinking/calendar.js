@@ -13,8 +13,18 @@
     version: '0.1',
     defaultElement: '<tr>',
     options: {
+      year: null,
+      week: null
+    },
+    is_current_ww: function() {
+      var now = new Date();
+      return now.getFullYear() == this.options.year && now.getWeek() == this.options.week;
     },
     _create: function() {
+      this.element.addClass('calendar-ww-' + this.options.year+'-'+this.options.week);
+      if (this.is_current_ww()) {
+        this.element.addClass("calendar-ww-current");
+      }
     }
   });
 
@@ -87,9 +97,7 @@ function formatDate(date) {
       return this.get_month_name(this.options.month-1) + " " + this.options.year;
     },
     _on_click_date: function(elem) {
-      var date = elem.calendar_day('option', 'date');
-      console.log(date);
-      this._trigger("dateselected", null, date);
+      this._trigger("dateselected", null, elem.calendar_day('option', 'date'));
     },
 
     get_days_in_month: function(year, month) {
@@ -196,13 +204,16 @@ function formatDate(date) {
       });
 
       wim.forEach(function(ww) {
+        var ww_n = ww[0].getWeek();
+        var year = that.options.year;
         var tr = $('<tr>');
-        tr.calendar_week();
+        tr.calendar_week({year: year, week:ww_n});
         table.append(tr);
         var td = $('<td>');
-        td.text(ww[0].getWeek());
-        td.addClass('calendar-ww');
-        td.addClass('calendar-ww-' + that.options.year+'-'+ww[0].getWeek());
+        td.text(ww_n);
+        td.addClass('calendar-ww-title');
+        td.addClass('calendar-ww-title-' + that.options.year+'-'+ww_n);
+        td.click(function() {that._trigger("wwselected", null, { year: that.options.year, ww: ww_n});});
         tr.append(td);
         ww.forEach(function(d) {
           var td = $('<td>');

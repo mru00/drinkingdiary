@@ -3,6 +3,8 @@
 * Copyright (C) 2014 mru@sisyphus.teil.cc
 */
 
+// requires gradient.js
+
 (function( factory ) {
   factory( jQuery );
 }(function( $ ) {

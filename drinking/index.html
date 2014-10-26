@@ -15,7 +15,6 @@
 
 <link rel="stylesheet" href="http://code.jquery.com/mobile/1.4.4/jquery.mobile-1.4.4.min.css" />
 <script src="http://code.jquery.com/jquery-1.11.1.min.js"></script>
-<script src="http://momentjs.com/downloads/moment.js"></script>
 <script src="http://code.jquery.com/mobile/1.4.4/jquery.mobile-1.4.4.min.js"></script>
 <script src="iso8601.min.js"></script>
 <script src="base64v1_0.js"></script>
@@ -23,6 +22,7 @@
 <script src="http://nparashuram.com/IndexedDBShim/dist/IndexedDBShim.min.js"></script>
 <script src="http://nparashuram.com/jquery-indexeddb/dist/jquery.indexeddb.js"></script>
 
+<script src="gradient.js"></script>
 <script src="circlechart.js"></script>
 <script src="calendar.js"></script>
 
@@ -38,8 +38,8 @@
 .field-error {
   font-weight: bold;
   font-style: italic;
-  margin-left: 3em;
-  margin-bottom: 3em;
+  /*margin-left: 3em;
+  margin-bottom: 3em;*/
 }
 .field-weelky table {
   border-collapse: collapse;
@@ -53,13 +53,15 @@ td, th {
 .ui-title {
   margin: 0 5% !important;
 }
+.calendar-day {
+  text-align: right;
+}
 .calendar-day-othermonth {
-  background-color: gray;
+  background-color: LightGray;
   font-style: italic;
 }
 .calendar-day-inmonth {
-  background-color: lightgray;
-  text-align: right;
+  background-color: YellowGreen;
 }
 .calendar-day {
   padding-top: .75em;
@@ -76,11 +78,16 @@ td, th {
   border: 1px solid black;
 }
 .calendar {
-  margin: 1em;
 }
-.calendar-ww {
-  font-size: 80%;
+.calendar-ww-title {
+  font-size: 90%;
+  background-color: YellowGreen;
   border-right: 1px solid black;
+}
+.calendar-ww-current .calendar-ww-title {
+  font-weight: bold;
+}
+.calendar-ww-current {
 }
 </style>
 
@@ -89,15 +96,17 @@ td, th {
 
 
 
-<div data-role="page" id="page-main" class="page">
+<div data-role="page" id="page-main" class="page" data-add-back-btn="true">
   <div data-role="header"><h1>Drinking Diary</h1></div>
 
   <div role="main" class="ui-content">
+    <p><div class="field-chart"></div></p>
     <ul class="field-list" data-role="listview" data-inset="true">
     </ul>
+    <div class="field-incrementers"></div>
     <a href="#page-consumption-details" class="btn-add ui-btn">Add consumption</a>
-    <a href="#page-consumptions" class="btn-show-consumptions btn ui-btn ui-btn-icon-left ui-icon-bars">Show all consumptions</a>
-    <a href="#page-stats" class="ui-btn ui-icon-info ui-btn-icon-left">Stats</a>
+    <!--a href="#page-consumptions" class="btn-show-consumptions btn ui-btn ui-btn-icon-left ui-icon-bars">Show all consumptions</a-->
+    <!--a href="#page-stats" class="ui-btn ui-icon-info ui-btn-icon-left">Stats</a-->
     <a href="#page-drinks" class="ui-btn ui-icon-edit ui-btn-icon-left">Edit drinks</a>
     <a href="#page-servings" class="ui-btn ui-icon-edit ui-btn-icon-left">Edit servings</a>
     <a href="#page-about" class="ui-btn ui-icon-info ui-btn-icon-left">About</a>
@@ -125,7 +134,7 @@ td, th {
 
 
 
-<div data-role="page" id="page-consumption-details" class="page page-edit">
+<div data-role="page" id="page-consumption-details" class="page page-edit" data-add-back-btn="true">
 
   <div data-role="header"><h1>I consumed</h1></div>
 
@@ -137,7 +146,7 @@ td, th {
       <datalist id="tags"></datalist>
     </form>
 
-    <button class="btn-add">Add entry</button>
+    <button class="btn-add">Add row</button>
 
     <button class="btn-save">Save</button>
     <button class="btn-cancel" data-rel="back">Cancel</button>
@@ -152,7 +161,7 @@ td, th {
 
 
 
-<div data-role="page" id="page-drinks" class="page">
+<div data-role="page" id="page-drinks" class="page" data-add-back-btn="true">
   <div data-role="header"><h1>Drinks</h1></div>
   <div role="main" class="ui-content">
     <ul class="field-drinks" data-role="listview" data-filter="true" data-inset="true"></ul>
@@ -165,7 +174,7 @@ td, th {
 
 
 
-<div data-role="page" id="page-drink-details" class="page page-edit">
+<div data-role="page" id="page-drink-details" class="page page-edit" data-add-back-btn="true">
   <div data-role="header"><h1>Drink</h1></div>
   <div role="main" class="ui-content">
     <table data-role="table">
@@ -189,7 +198,7 @@ td, th {
 
 
 
-<div data-role="page" id="page-servings" class="page">
+<div data-role="page" id="page-servings" class="page" data-add-back-btn="true">
   <div data-role="header"><h1>Servings</h1></div>
   <div role="main" class="ui-content">
 
@@ -203,7 +212,7 @@ td, th {
 
 
 
-<div data-role="page" id="page-serving-details" class="page page-edit">
+<div data-role="page" id="page-serving-details" class="page page-edit" data-add-back-btn="true">
   <div data-role="header"><h1>Serving</h1></div>
   <div role="main" class="ui-content">
     <table data-role="table">
@@ -228,7 +237,7 @@ td, th {
 
 
 
-<div data-role="page" id="page-show-error" class="page">
+<div data-role="page" id="page-show-error" class="page" data-add-back-btn="true">
   <div data-role="header"><h1>&#9888; Error &#9888;</h1></div>
   <div role="main" class="ui-content">
 
@@ -244,11 +253,12 @@ td, th {
 
 
 
-<div data-role="page" id="page-about" class="page">
+<div data-role="page" id="page-about" class="page" data-add-back-btn="true">
   <div data-role="header"><h1>About</h1></div>
   <div role="main" class="ui-content">
 
     <h2>Drinking Diary</h2>
+    <p><a href="#" class="field-url"></a></p>
     <p><q>It ain't that much!</q> (Anonymous)</p>
 
     <p>This app makes it easy to keep record of you alcohol consumption.</p>
@@ -257,9 +267,9 @@ td, th {
     <p>Contact:
     <a href="mailto:mru@sisyphus.teil.cc">mru@sisyphus.teil.cc</a>
     </p>
-    <p>Made with &#9829; using <a href="https://github.com/mru00/drinkingdiary">GitHub</a>.</p>
+    <!--p>Made with &#9829; using <a href="https://github.com/mru00/drinkingdiary">GitHub</a>.</p-->
 
-    <p>Version: <!--Vb-->Fri Oct 24 19:25:42 CEST 2014<!--Ve--></p>
+    <p>Version: <!--Vb-->2014-10-26--11:37<!--Ve--></p>
 
     <a href="#page-main" data-direction="reverse" class="btn-back ui-btn">Back</a>
   </div>
@@ -267,14 +277,14 @@ td, th {
 
 
 
-<div data-role="page" id="page-dump" class="page">
+<div data-role="page" id="page-dump" class="page" data-add-back-btn="true">
   <div data-role="header"><h1>Manage database</h1></div>
   <div role="main" class="ui-content">
 
     <label>db name: <span class="field-db-name"></span></label>
 
-    <label>Send data via email
-      <button class="btn-email ui-btn ui-icon-forward ui-btn-icon-left">Send via email</button></label>
+    <label>Send dump via email
+      <button class="btn-email ui-btn ui-icon-forward ui-btn-icon-left">Send dump via email</button></label>
 
     <label>String representation of database contents. Use your device's Copy-paste functionality, to e.g. send data via email, store in notes as backup, etc.
       <input type="text" class="field-dump" placeholder="dump data" data-clear-btn="true"></label>
@@ -285,7 +295,7 @@ td, th {
     <label>Load data from input field above. <em>Data might get overwritten!</em>
       <button class="btn-load ui-btn ui-icon-plus ui-btn-icon-left">Load dump</button></label>
 
-    <label>Delete whole database. <em>All data will be lost</em>.
+    <label>Delete whole database. <em>All data will be lost</em>. Restart the application to recreate the database.
       <button class="btn-drop ui-btn ui-icon-forbidden ui-btn-icon-left">Drop database</button></label>
 
     <label>Delete whole database and start a new one. <em>All data will be lost</em>.
@@ -302,7 +312,7 @@ td, th {
 
 
 
-<div data-role="page" id="page-stats" class="page ">
+<div data-role="page" id="page-stats" class="page " data-add-back-btn="true">
   <div data-role="header"><h1>Statistics</h1></div>
   <div role="main" class="ui-content">
 
@@ -310,13 +320,10 @@ td, th {
     <label>This week's consumption compared to a goal of <span class="field-goal">20</span> units per week:
       <div class="field-chart"></div></label>
 
-    <div class="field-calendar-prev-month"></div>
-    <div class="field-calendar"></div>
+    <p><div class="field-calendar-prev-month"></div></p>
 
-    <table class="field-weekly">
-      <thead><tr><th>Work week</th><th>Units</th><th>Avg/day</th><th>Days</th><th>Goal</th></tr></thead>
-      <tbody></tbody>
-    </table>
+    <p><div class="field-calendar"></div></p>
+
 
     <p><a href="https://en.wikipedia.org/wiki/Unit_of_alcohol">Wikipedia on alcohol units</a></p>
     <a href="#page-main" data-direction="reverse" class="btn-back ui-btn">Back</a>
